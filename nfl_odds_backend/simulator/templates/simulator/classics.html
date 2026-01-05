@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Key Classics (2024)</title>
+    <link rel="stylesheet" href="{% static 'simulator/styles.css' %}">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        .classics-container {
+            max_width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .classic-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .classic-table th {
+            background: #f7fafc;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .classic-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+            vertical-align: middle;
+        }
+
+        .classic-table tr:hover {
+            background-color: #f8fbff;
+        }
+
+        .score-badge {
+            background: #2c5282;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 13px;
+        }
+
+        .lc-badge {
+            font-weight: 700;
+            color: #38b2ac;
+        }
+
+        .wp-graph svg {
+            width: 100px;
+            height: 30px;
+            display: block;
+        }
+
+        .team-flex {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+
+<body style="background: #f7fafc;">
+
+    <div class="classics-container">
+        <header style="margin-bottom: 20px; text-align: center;">
+            <h1 style="color: #2d3748; margin-bottom: 10px;">Season Classics</h1>
+            <p style="color: #718096; margin-bottom: 15px;">Top 100 Games by Classic Score</p>
+            <div style="margin-bottom: 20px;">
+                <span style="font-size: 14px; font-weight: 600; color: #4a5568; margin-right: 10px;">Sort By:</span>
+                <a href="?sort=classic_score"
+                    style="text-decoration: none; font-size: 14px; font-weight: {% if current_sort == 'classic_score' %}700{% else %}400{% endif %}; color: {% if current_sort == 'classic_score' %}#2c5282{% else %}#718096{% endif %}; margin-right: 15px;">Classic
+                    Score</a>
+                <a href="?sort=lead_changes"
+                    style="text-decoration: none; font-size: 14px; font-weight: {% if current_sort == 'lead_changes' %}700{% else %}400{% endif %}; color: {% if current_sort == 'lead_changes' %}#2c5282{% else %}#718096{% endif %}; margin-right: 15px;">Lead
+                    Changes</a>
+                <a href="?sort=week"
+                    style="text-decoration: none; font-size: 14px; font-weight: {% if current_sort == 'week' %}700{% else %}400{% endif %}; color: {% if current_sort == 'week' %}#2c5282{% else %}#718096{% endif %};">Week</a>
+            </div>
+            <a href="/" style="text-decoration: none; color: #2c5282; font-weight: 600;">&larr; Back to Odds</a>
+        </header>
+
+        <table class="classic-table">
+            <thead>
+                <tr>
+                    <th style="width: 50px; text-align: center;">Rank</th>
+                    <th>Matchup</th>
+                    <th>Result</th>
+                    <th>Win Prob</th>
+                    <th style="text-align: center;">Week</th>
+                    <th style="text-align: center;">LC</th>
+                    <th style="text-align: right;">Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in games %}
+                <tr>
+                    <td style="text-align: center; font-weight: 700; color: #a0aec0;">{{ forloop.counter }}</td>
+                    <td>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <div class="team-flex">
+                                <img src="{{ g.away_logo }}" style="width: 20px; height: 20px;">
+                                <span style="font-weight: 500;">{{ g.away }}</span>
+                            </div>
+                            <div class="team-flex">
+                                <img src="{{ g.home_logo }}" style="width: 20px; height: 20px;">
+                                <span style="font-weight: 500;">{{ g.home }}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-weight: 600; font-size: 14px; color: #2d3748;">
+                            {{ g.score_str }} {% if g.is_ot %}<span style="font-size: 10px; color: #718096;">OT</span>{%
+                            endif %}
+                        </div>
+                    </td>
+                    <td class="wp-graph">
+                        {% if g.wp_svg_points %}
+                        <svg viewBox="0 0 100 30" preserveAspectRatio="none">
+                            <!-- Helper line at 50% (Y=15) -->
+                            <line x1="0" y1="15" x2="100" y2="15" stroke="#edf2f7" stroke-width="1" />
+                            <!-- Graph Path -->
+                            <polyline fill="none" stroke="#4a5568" stroke-width="1.5" stroke-linejoin="round"
+                                points="{{ g.wp_svg_points }}" />
+                        </svg>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">{{ g.week }}</td>
+                    <td style="text-align: center;"><span class="lc-badge">{{ g.lead_changes }}</span></td>
+                    <td style="text-align: right;"><span class="score-badge">{{ g.classic_score }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</body>
+
+</html>

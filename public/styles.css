@@ -1,0 +1,841 @@
+:root {
+    --font-primary: 'Roboto', sans-serif;
+    --font-mono: 'Roboto Mono', monospace;
+    --bg-color: #f4f6f8;
+    --text-color: #1a202c;
+    --border-color: #e2e8f0;
+    --highlight-bg: #fff;
+    --header-bg: #2d3748;
+
+    /* Navy Theme Heatmap Colors */
+    --heat-low: #ffffff;
+    --heat-mid: #90cdf4;
+    /* Light Blue */
+    --heat-high: #2c5282;
+    /* Navy Blue */
+    --heat-max: #1a365d;
+    /* Dark Navy */
+}
+
+body {
+    font-family: var(--font-primary);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1400px;
+    /* Wider for more columns/logos */
+    margin: 0 auto;
+    background: white;
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+}
+
+header h1 {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    color: #2d3748;
+}
+
+.subtitle {
+    color: #718096;
+    font-size: 15px;
+    margin-bottom: 24px;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0;
+    overflow-x: auto;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #718096;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.tab-btn:hover {
+    color: #2c5282;
+}
+
+.tab-btn.active {
+    color: #2c5282;
+    border-bottom-color: #2c5282;
+}
+
+/* Sim Controls Headers */
+.controls-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.loading-indicator {
+    display: none;
+    font-size: 13px;
+    color: #2c5282;
+    font-weight: 600;
+    align-items: center;
+    gap: 8px;
+}
+
+.loading-indicator.visible {
+    display: flex;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    /* Fixed breaks */
+    border-spacing: 0;
+    font-size: 13px;
+    border-top: 2px solid #2d3748;
+}
+
+thead th {
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 12px 10px;
+    text-align: center;
+    border-bottom: 2px solid #cbd5e0;
+    /* Thicker for header */
+    background-color: #fff;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    cursor: pointer;
+    user-select: none;
+}
+
+/* Remove Link Styling from Headers */
+thead th a {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+thead th:hover {
+    background-color: #f7fafc;
+}
+
+tbody td {
+    padding: 8px 12px;
+    text-align: right;
+    font-family: var(--font-mono);
+    color: #2d3748;
+    vertical-align: middle;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+tbody tr:not(.group-divider):nth-child(even) {
+    background-color: #f7fafc;
+}
+
+/* Team Cell */
+tbody td.team-cell {
+    text-align: left;
+    font-family: var(--font-primary);
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    border-bottom: 1px solid #e2e8f0;
+    /* Ensure border exists */
+}
+
+/* Inline Tabs as Segmented Control */
+.table-tabs {
+    display: inline-flex;
+    background: #edf2f7;
+    padding: 4px;
+    border-radius: 8px;
+    gap: 0;
+}
+
+.table-tab-btn {
+    text-decoration: none;
+    color: #718096;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: none;
+    transition: all 0.2s;
+}
+
+.table-tab-btn:hover {
+    color: #4a5568;
+    background-color: rgba(255, 255, 255, 0.5);
+}
+
+.table-tab-btn.active {
+    color: #2d3748;
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Game Card Unified Style */
+.game-card {
+    background: #f7fafc;
+    border: 1px solid #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    min-width: 180px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Group Divider Row */
+.group-divider td {
+    background-color: #e2e8f0;
+    border-top: 1px solid #cbd5e0;
+    border-bottom: 1px solid #cbd5e0;
+    padding: 0;
+    height: 8px;
+}
+
+/* Fix Team Cell border conflict */
+
+
+.team-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+tbody td.record-cell {
+    text-align: center;
+    color: #718096;
+    font-family: var(--font-primary);
+    font-size: 12px;
+}
+
+/* Heatmap base */
+.heatmap-cell {
+    color: #000;
+    font-weight: 500;
+    transition: background-color 0.8s ease, color 0.8s ease;
+}
+
+/* Sim Controls */
+.sim-controls {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+.cb-cell {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0;
+}
+
+.cb-link {
+    text-decoration: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 2px;
+    height: 100%;
+}
+
+/* Custom Checkbox (Compact Style) */
+.custom-checkbox {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e0;
+    border-radius: 3px;
+    background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.custom-checkbox::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 7px;
+    width: 6px;
+    height: 12px;
+    border: solid transparent;
+    border-width: 0 3px 3px 0;
+    /* Thick checkmark */
+    transform: rotate(45deg) scale(0);
+    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+/* Checked States - Show Checkmark */
+.custom-checkbox.checked::after {
+    transform: rotate(45deg) scale(1.2);
+}
+
+/* Specific Colors for Checkmarks */
+/* Specific Colors for Checkmarks - Monochrome Update */
+.cb-link.win .custom-checkbox.checked,
+.cb-link.loss .custom-checkbox.checked,
+.cb-link.tie .custom-checkbox.checked,
+.cb-link.win_out .custom-checkbox.checked {
+    border-color: #4a5568;
+    background-color: #fff;
+}
+
+.cb-link.win .custom-checkbox.checked::after,
+.cb-link.loss .custom-checkbox.checked::after,
+.cb-link.tie .custom-checkbox.checked::after,
+.cb-link.win_out .custom-checkbox.checked::after {
+    border-color: #1a202c;
+    /* Black checkmark */
+}
+
+/* Hover Effects */
+.cb-link:hover .custom-checkbox {
+    border-color: #718096;
+    box-shadow: 0 0 0 3px rgba(160, 174, 192, 0.2);
+}
+
+/* Action Buttons (Condensed) */
+.actions-cell {
+    text-align: center;
+    padding: 6px 4px;
+    white-space: nowrap;
+}
+
+.action-btn-group {
+    display: inline-flex;
+    background: #fff;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 24px;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    color: #718096;
+    border-right: 1px solid #cbd5e0;
+    transition: all 0.1s;
+}
+
+.action-btn:last-child {
+    border-right: none;
+}
+
+.action-btn:hover {
+    background-color: #edf2f7;
+    color: #4a5568;
+}
+
+.action-btn.active.win {
+    background-color: #c6f6d5;
+    color: #22543d;
+}
+
+.action-btn.active.loss {
+    background-color: #fed7d7;
+    color: #742a2a;
+}
+
+.action-btn.active.tie {
+    background-color: #e2e8f0;
+    color: #2d3748;
+}
+
+/* Legend */
+.legend {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    font-size: 11px;
+    color: #718096;
+}
+
+.gradient-bar {
+    width: 120px;
+    height: 12px;
+    /* White -> Light Blue -> Navy */
+    background: linear-gradient(to right, #ffffff, #90cdf4, #2c5282, #1a365d);
+    margin: 0 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 2px;
+}
+
+.footer-note {
+    margin-top: 20px;
+    font-size: 12px;
+    color: #a0aec0;
+    font-style: italic;
+}
+
+/* --- News Ticker (Extracted) --- */
+.news-ticker {
+    display: flex;
+    background: #1a202c;
+    color: #fff;
+    font-family: 'Roboto', sans-serif;
+    height: 48px;
+    overflow: hidden;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ticker-title {
+    background: #c53030;
+    color: #fff;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    font-weight: 800;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    z-index: 2;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+.ticker-wrap {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: #2d3748;
+    mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+    -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+.ticker-move {
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    animation: ticker-scroll 15s linear infinite;
+}
+
+/* Pause on hover */
+.ticker-wrap:hover .ticker-move {
+    animation-play-state: paused;
+}
+
+.ticker-item {
+    display: flex;
+    align-items: center;
+    margin-right: 40px;
+    padding-left: 10px;
+}
+
+.ticker-item img {
+    height: 18px;
+    width: 18px;
+    object-fit: contain;
+}
+
+.ticker-team {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 15px;
+}
+
+.ticker-label {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-right: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.ticker-label.ticker-clinched {
+    color: #48bb78;
+    border: 1px solid #48bb78;
+}
+
+.ticker-label.ticker-eliminated {
+    color: #f56565;
+    border: 1px solid #f56565;
+}
+
+.ticker-abbr {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+@keyframes ticker-scroll {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+
+    100% {
+        transform: translate3d(-50%, 0, 0);
+    }
+}
+
+/* --- Key Games / Matchups --- */
+.games-scroll-container {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+}
+
+.game-card-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.team-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.team-info img {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+}
+
+.team-name-sm {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.prob-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #edf2f7;
+    color: #718096;
+}
+
+.prob-badge.high {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.prob-bar-container {
+    margin-top: 5px;
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+}
+
+.stake-footer {
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    color: #718096;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.stake-line {
+    margin-bottom: 2px;
+}
+
+/* --- Still In The Hunt --- */
+.alive-section {
+    margin-top: 40px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.alive-title {
+    font-size: 18px;
+    font-weight: 800;
+    color: #2d3748;
+    margin-bottom: 20px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.alive-columns {
+    display: flex;
+    gap: 40px;
+}
+
+.alive-col {
+    flex: 1;
+}
+
+.alive-header {
+    font-size: 14px;
+    font-weight: 700;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+}
+
+.alive-header.afc {
+    color: #c53030;
+    border-bottom: 2px solid #fed7d7;
+}
+
+.alive-header.nfc {
+    color: #2c5282;
+    border-bottom: 2px solid #bee3f8;
+}
+
+.alive-team-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.alive-team-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.alive-team-row.afc {
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+}
+
+.alive-team-row.nfc {
+    background: #ebf8ff;
+    border: 1px solid #bee3f8;
+}
+
+.alive-team-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.alive-status {
+    text-align: right;
+}
+
+.alive-status-text {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.alive-status-text.afc {
+    color: #c53030;
+}
+
+.alive-status-text.nfc {
+    color: #2b6cb0;
+}
+
+.clinch-subtext {
+    font-size: 10px;
+    color: #718096;
+}
+
+.empty-alive {
+    color: #cbd5e0;
+    font-style: italic;
+    padding: 10px;
+}
+
+/* --- Legend --- */
+.legend-container {
+    display: flex;
+    gap: 15px;
+    font-size: 11px;
+    color: #718096;
+    margin-top: 15px;
+    margin-bottom: 30px;
+    justify-content: center;
+}
+
+/* --- Spinner Animation --- */
+@keyframes spin {
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* --- Stories & Layout --- */
+.app-layout {
+    display: flex;
+    gap: 30px;
+    margin-top: 20px;
+    align-items: flex-start;
+}
+
+.main-area {
+    flex: 1;
+    min-width: 0;
+}
+
+.stories-aside {
+    width: 350px;
+    flex-shrink: 0;
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    position: sticky;
+    top: 20px;
+}
+
+.aside-header {
+    font-size: 13px;
+    font-weight: 900;
+    color: #475569;
+    letter-spacing: 1.5px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.aside-header::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: #cbd5e0;
+}
+
+.stories-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.story-card {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s;
+}
+
+.story-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.story-image-header {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    background: #2d3748;
+}
+
+.story-header {
+    background: transparent;
+    color: #1a202c;
+    padding: 15px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.story-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.story-meta {
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+.story-content {
+    padding: 15px;
+    line-height: 1.5;
+    color: #475569;
+    font-size: 13px;
+}
+
+.story-content p {
+    margin-bottom: 10px;
+}
+
+.story-content b {
+    color: #1e293b;
+}
+
+.story-footer {
+    padding: 10px 15px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+}
+
+.story-link-btn {
+    text-decoration: none;
+    color: #2563eb;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+@media (max-width: 1100px) {
+    .app-layout {
+        flex-direction: column;
+    }
+
+    .stories-aside {
+        width: 100%;
+        position: static;
+        max-height: none;
+    }
+}

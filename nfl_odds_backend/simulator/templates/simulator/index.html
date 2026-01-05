@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Playoff Odds V3 (SSR)</title>
+    <!-- Link to Static CSS -->
+    <link rel="stylesheet" href="{% static 'simulator/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'simulator/bracket.css' %}">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <h1>NFL Playoff And Super Bowl Odds</h1>
+            <p class="subtitle">Real-time Monte Carlo Simulation (1000 iter). Live data from ESPN. (Server-Side)</p>
+        </header>
+
+
+
+        <div class="controls-header">
+            <div id="loading-indicator" class="loading-indicator">
+                <span class="spinner-icon"
+                    style="display: inline-block; animation: spin 1s linear infinite; margin-right: 5px;">&#9696;</span>
+                Updating Odds...
+            </div>
+        </div>
+
+        {% if clinched_teams or eliminated_teams or trending_up or trending_down %}
+        <div class="news-ticker">
+            <div class="ticker-title">THE WIRE</div>
+            <div class="ticker-wrap">
+                <div class="ticker-move">
+                    {% if clinched_teams %}<div class="ticker-item"><span class="ticker-label">CLINCHED:</span>{% for t
+                        in clinched_teams %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span class="ticker-abbr">{{
+                            t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if eliminated_teams %}<div class="ticker-item"><span class="ticker-label">ELIMINATED:</span>{%
+                        for t in eliminated_teams %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if trending_up %}<div class="ticker-item"><span class="ticker-label trending-up">TRENDING
+                            UP:</span>{% for t in trending_up %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if trending_down %}<div class="ticker-item"><span class="ticker-label trending-down">TRENDING
+                            DOWN:</span>{% for t in trending_down %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if clinched_teams %}<div class="ticker-item"><span class="ticker-label">CLINCHED:</span>{% for t
+                        in clinched_teams %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span class="ticker-abbr">{{
+                            t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if eliminated_teams %}<div class="ticker-item"><span class="ticker-label">ELIMINATED:</span>{%
+                        for t in eliminated_teams %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if trending_up %}<div class="ticker-item"><span class="ticker-label trending-up">TRENDING
+                            UP:</span>{% for t in trending_up %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                    {% if trending_down %}<div class="ticker-item"><span class="ticker-label trending-down">TRENDING
+                            DOWN:</span>{% for t in trending_down %}<img src="{{ t.logo }}" alt="{{ t.abbr }}"><span
+                            class="ticker-abbr">{{ t.abbr }}</span>{% endfor %}</div>{% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if top_games %}
+        <div class="key-games-section">
+            <h3 style="margin: 0 0 10px 0; font-size: 16px; color: #2d3748;">Key Matchups</h3>
+            <div class="games-scroll-container">
+                {% for g in top_games %}
+                <div class="game-card">
+                    <div class="game-card-inner">
+                        <!-- Away Team -->
+                        <div class="team-row">
+                            <div class="team-info">
+                                <img src="{{ g.away_logo }}">
+                                <span class="team-name-sm">{{ g.away }}</span>
+                            </div>
+                            <div class="prob-badge {% if g.away_win_prob >= 50 %}high{% endif %}">{{ g.away_win_prob }}%
+                            </div>
+                        </div>
+
+                        <!-- Home Team -->
+                        <div class="team-row">
+                            <div class="team-info">
+                                <img src="{{ g.home_logo }}">
+                                <span class="team-name-sm">{{ g.home }}</span>
+                            </div>
+                            <div class="prob-badge {% if g.home_win_prob >= 50 %}high{% endif %}">{{ g.home_win_prob }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Win Prob Bar (Team Colors) -->
+                    <div class="prob-bar-container">
+                        <div style="width: {{ g.away_win_prob }}%; background: {{ g.away_color }};"></div>
+                        <div style="width: {{ g.home_win_prob }}%; background: {{ g.home_color }};"></div>
+                    </div>
+
+                    <!-- Stakes Footer (Stacked) -->
+                    <div class="stake-footer">
+                        <div class="stake-line">
+                            <span style="font-weight: 800; color: #1a202c; font-size: 11px;">{{ g.away }}</span>: <span
+                                style="color: #718096;">{{ g.stake_a_text }}</span>
+                        </div>
+                        <div>
+                            <span style="font-weight: 800; color: #1a202c; font-size: 11px;">{{ g.home }}</span>: <span
+                                style="color: #718096;">{{ g.stake_h_text }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <br>
+        {% endif %}
+
+        {% if recent_games %}
+        <div class="key-games-section" style="margin-top: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; font-size: 16px; color: #2d3748;">Best Games of the Week {{ recent_header }}</h3>
+                <a href="/classics/"
+                    style="font-size: 13px; color: #2c5282; font-weight: 600; text-decoration: none;">View All Classics
+                    &rarr;</a>
+            </div>
+            <div class="games-scroll-container">
+                {% for g in recent_games %}
+                <div class="game-card">
+                    <div
+                        style="font-weight: 700; font-size: 14px; margin-bottom: 8px; color: #2c5282; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px;">
+                        Classic Score: {{ g.classic_score }}
+                    </div>
+
+                    <div class="game-card-inner">
+                        <!-- Away Team -->
+                        <div class="team-row">
+                            <div class="team-info">
+                                <img src="{{ g.away_logo }}">
+                                <span class="team-name-sm">{{ g.away_abbr }}</span>
+                            </div>
+                            <span style="font-size: 12px; color: #2d3748; font-weight: 700;">{{ g.away_score }}</span>
+                        </div>
+
+                        <!-- Home Team -->
+                        <div class="team-row">
+                            <div class="team-info">
+                                <img src="{{ g.home_logo }}">
+                                <span class="team-name-sm">{{ g.home_abbr }}</span>
+                            </div>
+                            <span style="font-size: 12px; color: #2d3748; font-weight: 700;">{{ g.home_score }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <br>
+        {% endif %}
+
+        <!-- Container we target for replacement -->
+        <div id="ajax-container" class="table-container">
+
+            {% if filter == 'playoffs' %}
+            <!-- PLAYOFF BRACKET VIEW -->
+            <div style="padding: 20px;">
+                <!-- Tabs -->
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div class="table-tabs" style="display: inline-flex;">
+                        <a href="?filter=league&sort={{ sort }}" class="table-tab-btn" data-ajax="true">League</a>
+                        <a href="?filter=conf&sort={{ sort }}" class="table-tab-btn" data-ajax="true">Conference</a>
+                        <a href="?filter=div&sort={{ sort }}" class="table-tab-btn" data-ajax="true">Division</a>
+                        <a href="?filter=playoffs&sort={{ sort }}" class="table-tab-btn active"
+                            data-ajax="true">Playoffs</a>
+                    </div>
+                </div>
+
+                <h2 style="text-align: center; font-size: 24px; font-weight: 700; color: #2d3748; margin-bottom: 10px;">
+                    NFL Playoff Bracket</h2>
+                <p
+                    style="text-align: center; color: #718096; font-size: 13px; margin-bottom: 30px; font-style: italic;">
+                    *Seeding Logic: In each round, the highest remaining seed hosts the lowest remaining seed.
+                </p>
+
+                <!-- Bracket Container -->
+                <div class="bracket-container">
+                    <!-- BRACKET VISUALIZATION -->
+                    <div class="bracket-wrapper">
+                        <!-- AFC SIDE (Left) -->
+                        <div class="bracket-tree">
+                            <div class="round-col">
+                                <!-- Bye -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box seed-1-box">
+                                            <img src="{{ afc_seeds.0.logo }}">
+                                            <span>#1 {{ afc_seeds.0.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 2 vs 7 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.1.logo }}">
+                                            <span>#2 {{ afc_seeds.1.name }}</span>
+                                        </div>
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.6.logo }}">
+                                            <span>#7 {{ afc_seeds.6.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 3 vs 6 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.2.logo }}">
+                                            <span>#3 {{ afc_seeds.2.name }}</span>
+                                        </div>
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.5.logo }}">
+                                            <span>#6 {{ afc_seeds.5.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 4 vs 5 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.3.logo }}">
+                                            <span>#4 {{ afc_seeds.3.name }}</span>
+                                        </div>
+                                        <div class="team-box afc-box">
+                                            <img src="{{ afc_seeds.4.logo }}">
+                                            <span>#5 {{ afc_seeds.4.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AFC Divisional & Championship -->
+                        <div class="round-col">
+                            <div class="matchup-row" style="margin-top: 40px;">
+                                <div class="matchup-pair">
+                                    <div class="team-box" style="border-left-color: #cbd5e0;">High Seed vs Low Seed
+                                    </div>
+                                    <div class="team-box" style="border-left-color: #cbd5e0;">Remaining vs Remaining
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="matchup-row" style="margin-bottom: 20px;">
+                                <div class="matchup-pair">
+                                    <div class="team-box" style="border-left-color: #cbd5e0;">High Seed vs Low Seed
+                                    </div>
+                                    <div class="team-box" style="border-left-color: #cbd5e0;">Remaining vs Remaining
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="round-col">
+                            <div class="matchup-row" style="margin-top: 80px;">
+                                <div class="matchup-pair">
+                                    <div class="team-box" style="border-left-color: #c53030;">AFC Finalist 1</div>
+                                    <div class="team-box" style="border-left-color: #c53030;">AFC Finalist 2</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUPER BOWL CENTER -->
+                        <div class="sb-center">
+                            <div class="sb-logo-text">SUPER<br>BOWL</div>
+                            <div class="sb-roman">LIX</div>
+                        </div>
+
+                        <!-- NFC SIDE (Right) -->
+                        <div class="bracket-tree">
+                            <!-- NFC Championship & Divisional -->
+                            <div class="round-col">
+                                <div class="matchup-row" style="margin-top: 80px;">
+                                    <div class="matchup-pair">
+                                        <div class="team-box" style="border-left-color: #2b6cb0;">NFC Finalist 1</div>
+                                        <div class="team-box" style="border-left-color: #2b6cb0;">NFC Finalist 2</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="round-col">
+                                <div class="matchup-row" style="margin-top: 40px;">
+                                    <div class="matchup-pair">
+                                        <div class="team-box" style="border-left-color: #cbd5e0;">High Seed vs Low Seed
+                                        </div>
+                                        <div class="team-box" style="border-left-color: #cbd5e0;">Remaining vs Remaining
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="matchup-row" style="margin-bottom: 20px;">
+                                    <div class="matchup-pair">
+                                        <div class="team-box" style="border-left-color: #cbd5e0;">High Seed vs Low Seed
+                                        </div>
+                                        <div class="team-box" style="border-left-color: #cbd5e0;">Remaining vs Remaining
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="round-col nfc-col">
+                                <!-- Bye -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box seed-1-box">
+                                            <img src="{{ nfc_seeds.0.logo }}">
+                                            <span>#1 {{ nfc_seeds.0.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 2 vs 7 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.1.logo }}">
+                                            <span>#2 {{ nfc_seeds.1.name }}</span>
+                                        </div>
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.6.logo }}">
+                                            <span>#7 {{ nfc_seeds.6.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 3 vs 6 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.2.logo }}">
+                                            <span>#3 {{ nfc_seeds.2.name }}</span>
+                                        </div>
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.5.logo }}">
+                                            <span>#6 {{ nfc_seeds.5.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- 4 vs 5 -->
+                                <div class="matchup-row">
+                                    <div class="matchup-pair">
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.3.logo }}">
+                                            <span>#4 {{ nfc_seeds.3.name }}</span>
+                                        </div>
+                                        <div class="team-box nfc-box">
+                                            <img src="{{ nfc_seeds.4.logo }}">
+                                            <span>#5 {{ nfc_seeds.4.name }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Still Alive Section -->
+                <div class="alive-section">
+                    <h3 class="alive-title">Still In The Hunt</h3>
+
+                    <div class="alive-columns">
+                        <!-- AFC Column -->
+                        <div class="alive-col">
+                            <h4 class="alive-header afc">AFC</h4>
+                            <div class="alive-team-list">
+                                {% for team in alive_afc %}
+                                <div class="alive-team-row afc">
+                                    <div class="alive-team-info">
+                                        <img src="{{ team.logo }}" class="team-logo">
+                                        <span class="team-name-sm">{{ team.name }}</span>
+                                    </div>
+                                    <div class="alive-status">
+                                        <div class="alive-status-text afc">{{ team.madePlayoffs_str }}</div>
+                                        {% if team.clinch_str %}<div class="clinch-subtext">{{ team.clinch_str }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <div class="empty-alive">No other teams alive</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- NFC Column -->
+                        <div class="alive-col">
+                            <h4 class="alive-header nfc">NFC</h4>
+                            <div class="alive-team-list">
+                                {% for team in alive_nfc %}
+                                <div class="alive-team-row nfc">
+                                    <div class="alive-team-info">
+                                        <img src="{{ team.logo }}" class="team-logo">
+                                        <span class="team-name-sm">{{ team.name }}</span>
+                                    </div>
+                                    <div class="alive-status">
+                                        <div class="alive-status-text nfc">{{ team.madePlayoffs_str }}</div>
+                                        {% if team.clinch_str %}<div class="clinch-subtext">{{ team.clinch_str }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <div class="empty-alive">No other teams alive</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- STANDARD TABLE VIEW -->
+            <table id="odds-table">
+                <thead>
+                    <!-- Tabs Row -->
+                    <tr>
+                        <th colspan="8" style="padding: 10px; border-bottom: 1px solid #e2e8f0; background: #fff;">
+                            <div class="table-tabs"
+                                style="justify-content: center; margin: 0 auto; width: fit-content;">
+                                <a href="?filter=league&sort={{ sort }}"
+                                    class="table-tab-btn {% if filter == 'league' %}active{% endif %}"
+                                    data-ajax="true">League</a>
+                                <a href="?filter=conf&sort={{ sort }}"
+                                    class="table-tab-btn {% if filter == 'conf' %}active{% endif %}"
+                                    data-ajax="true">Conference</a>
+                                <a href="?filter=div&sort={{ sort }}"
+                                    class="table-tab-btn {% if filter == 'div' %}active{% endif %}"
+                                    data-ajax="true">Division</a>
+                                <a href="?filter=playoffs&sort={{ sort }}"
+                                    class="table-tab-btn {% if filter == 'playoffs' %}active{% endif %}"
+                                    data-ajax="true">Playoffs</a>
+                            </div>
+                        </th>
+                    </tr>
+                    <!-- Headers -->
+                    <tr>
+                        <th class="col-team"><a href="?filter={{ filter }}&sort=name" data-ajax="true">Team</a></th>
+                        <th class="col-record"><a href="?filter={{ filter }}&sort=record" data-ajax="true">Record</a>
+                        </th>
+                        <th class="col-confdiv">Conf/Div</th>
+                        <th class="col-playoff"><a href="?filter={{ filter }}&sort=madePlayoffs"
+                                data-ajax="true">Playoffs</a></th>
+                        <th class="col-division"><a href="?filter={{ filter }}&sort=wonDivision" data-ajax="true">Win
+                                Div</a></th>
+                        <th class="col-seed1"><a href="?filter={{ filter }}&sort=seed1" data-ajax="true">Bye</a></th>
+                        <th class="col-sb"><a href="?filter={{ filter }}&sort=wonSuperBowl" data-ajax="true">Super
+                                Bowl</a></th>
+
+                        <!-- Checkbox Columns -->
+                        <th class="col-cb">Sim</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    {% for team in teams %}
+
+                    {% if filter == 'conf' %}
+                    {% ifchanged team.conference %}
+                    <tr class="group-divider">
+                        <td colspan="8"></td>
+                    </tr>
+                    {% endifchanged %}
+                    {% elif filter == 'div' %}
+                    {% ifchanged team.division %}
+                    <tr class="group-divider">
+                        <td colspan="8"></td>
+                    </tr>
+                    {% endifchanged %}
+                    {% endif %}
+
+                    <tr>
+                        <!-- Team -->
+                        <td class="team-cell">
+                            <div style="display: flex; flex-direction: column; gap: 4px;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <img src="{{ team.logo }}" class="team-logo" alt="">
+                                    <span>{{ team.name }}{% if team.clinch_str %} <span
+                                            style="font-size:10px;color:#718096;font-weight:700">{{ team.clinch_str
+                                            }}</span>{% endif %}</span>
+                                </div>
+                                <!-- Inline Scenarios -->
+                                {% if team.scenario_data.math_details %}
+                                <ul
+                                    style="margin: 4px 0 0 30px; padding-left: 0; list-style: none; font-size: 11px; color: #4a5568;">
+                                    {% for detail in team.scenario_data.math_details %}
+                                    {% if detail.type == 'team_action' %}
+                                    <li style="margin-bottom: 2px; display: flex; align-items: center;">
+                                        {% if detail.logo %}
+                                        <img src="{{ detail.logo }}"
+                                            style="width: 14px; height: 14px; margin-right: 4px; object-fit: contain;"
+                                            alt="{{ detail.abbr }}">
+                                        {% else %}
+                                        <span style="font-weight: bold; margin-right: 4px;">{{ detail.abbr }}</span>
+                                        {% endif %}
+                                        <span>{{ detail.text }}</span>
+                                    </li>
+                                    {% elif detail.type == 'success' %}
+                                    <li style="margin-bottom: 2px; display: flex; align-items: center;">
+                                        <span style="color: #48bb78; margin-right: 4px; font-weight: bold;">✓</span>
+                                        <span>{{ detail.text }}</span>
+                                    </li>
+                                    {% elif detail.type == 'error' %}
+                                    <li style="margin-bottom: 2px; display: flex; align-items: center;">
+                                        <span style="color: #f56565; margin-right: 4px; font-weight: bold;">❌</span>
+                                        <span>{{ detail.text }}</span>
+                                    </li>
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Record -->
+                        <td class="record-cell">{{ team.record_str }}</td>
+
+                        <!-- Conf/Div -->
+                        <td class="record-cell" style="text-align: center; color: #555;">{{ team.conf_div_str }}</td>
+
+                        <!-- Data -->
+                        <td class="heatmap-cell"
+                            style="background-color: {{ team.madePlayoffs_bg }}; color: {{ team.madePlayoffs_txt }}">{{
+                            team.madePlayoffs_str }}</td>
+                        <td class="heatmap-cell"
+                            style="background-color: {{ team.wonDivision_bg }}; color: {{ team.wonDivision_txt }}">{{
+                            team.wonDivision_str }}</td>
+                        <td class="heatmap-cell"
+                            style="background-color: {{ team.seed1_bg }}; color: {{ team.seed1_txt }}">{{ team.seed1_str
+                            }}</td>
+                        <td class="heatmap-cell"
+                            style="background-color: {{ team.wonSuperBowl_bg }}; color: {{ team.wonSuperBowl_txt }}">{{
+                            team.wonSuperBowl_str }}</td>
+
+                        <!-- Checkboxes (Links) -->
+                        <!-- Condensed Action Column -->
+                        <td class="actions-cell">
+                            <div class="action-btn-group">
+                                <a href="?action=win_next&team={{ team.id }}&filter={{ filter }}&sort={{ sort }}"
+                                    class="action-btn {% if team.next_status == 'win' %}active win{% endif %}"
+                                    data-ajax="true" title="Win Next">W</a>
+                                <a href="?action=lose_next&team={{ team.id }}&filter={{ filter }}&sort={{ sort }}"
+                                    class="action-btn {% if team.next_status == 'loss' %}active loss{% endif %}"
+                                    data-ajax="true" title="Lose Next">L</a>
+                                <a href="?action=tie_next&team={{ team.id }}&filter={{ filter }}&sort={{ sort }}"
+                                    class="action-btn {% if team.next_status == 'tie' %}active tie{% endif %}"
+                                    data-ajax="true" title="Tie Next">T</a>
+                            </div>
+                        </td>
+                    </tr>
+
+
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+        </div>
+
+        <!-- Legend -->
+        <div class="legend-container">
+            <span><strong>z</strong> = Clinched 1st Seed</span>
+            <span><strong>y</strong> = Clinched Division</span>
+            <span><strong>x</strong> = Clinched Playoffs</span>
+            <span><strong>e</strong> = Eliminated</span>
+        </div>
+
+        <div class="footer-note">
+            <p>* Probabilities generated by 1,000 Monte Carlo simulations of remaining schedule + simplified
+                tiebreakers. (Server-Side)</p>
+        </div>
+    </div>
+
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            function attachListeners() {
+                // Select all links with data-ajax="true"
+                const links = document.querySelectorAll('a[data-ajax="true"]');
+                links.forEach(link => {
+                    // Avoid double binding
+                    if (link.dataset.bound) return;
+                    link.dataset.bound = "true";
+
+                    link.addEventListener('click', async function (e) {
+                        e.preventDefault();
+                        const url = this.href;
+
+                        // Show Loading
+                        const loader = document.getElementById('loading-indicator');
+                        const container = document.getElementById('ajax-container');
+                        if (loader) loader.style.display = 'flex';
+                        if (container) container.style.opacity = '0.6';
+
+                        try {
+                            const response = await fetch(url);
+                            const text = await response.text();
+
+                            // Parse
+                            const parser = new DOMParser();
+                            const doc = parser.parseFromString(text, 'text/html');
+
+                            // Swap key parts
+                            // 1. Table Container
+                            const newContainer = doc.getElementById('ajax-container');
+                            if (newContainer && container) {
+                                container.innerHTML = newContainer.innerHTML;
+                            }
+
+                            // 2. Key Matchups (in case they change based on simulation)
+                            // We might want to swap the whole .container body if we want everything to update
+                            // But keeping it simple to just the table and keys matches helps flicker
+                            // For now, just table is what user asked (win options).
+                            // But win options change leverage! So we should ideally swap more.
+                            // Let's swap the `.container` CONTENT minus header?
+
+                            // Let's just swap the specific IDs if found.
+
+                        } catch (err) {
+                            console.error("AJAX Failed", err);
+                            window.location.href = url; // Fallback
+                        } finally {
+                            if (loader) loader.style.display = 'none';
+                            if (container) container.style.opacity = '1';
+                            // Re-bind
+                            attachListeners();
+                        }
+                    });
+                });
+            }
+
+            attachListeners();
+        });
+    </script>
+</body>
+
+</html>
