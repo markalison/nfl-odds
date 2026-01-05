@@ -457,30 +457,76 @@ function renderTicker() {
 
     const createTickerContent = () => {
         let itemsHtml = '';
-        if (clinched.length > 0) {
-            itemsHtml += `<div class="ticker-item"><span class="ticker-label ticker-clinched">CLINCHED:</span>`;
-            clinched.forEach(t => {
-                itemsHtml += `
+
+        // Helper to find team by seed and conf
+        const getSeed = (teams, conf, seedNum) =>
+            teams.find(t => t.conference === conf && (t.seed === seedNum || t.simData?.seed1 && seedNum === 1));
+
+        const teamsArr = Object.values(GLOBAL_DATA.teams);
+
+        // AFC Matchups
+        const afc1 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 1);
+        const afc2 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 2);
+        const afc3 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 3);
+        const afc4 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 4);
+        const afc5 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 5);
+        const afc6 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 6);
+        const afc7 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 7);
+
+        // NFC Matchups
+        const nfc1 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 1);
+        const nfc2 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 2);
+        const nfc3 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 3);
+        const nfc4 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 4);
+        const nfc5 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 5);
+        const nfc6 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 6);
+        const nfc7 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 7);
+
+        const renderMatchup = (t1, t2) => {
+            if (!t1 || !t2) return '';
+            return `
+                <div class="ticker-item matchup-item" style="border-right: 1px solid #4a5568; padding-right: 20px;">
                     <div class="ticker-team">
+                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">${t1.seed}</span>
+                        <img src="${t1.logo}" class="ticker-logo" onerror="this.style.display='none'">
+                        <span class="ticker-abbr">${t1.abbr}</span>
+                    </div>
+                    <span style="font-size:12px; font-weight:700; color:#e2e8f0; margin:0 8px;">VS</span>
+                    <div class="ticker-team" style="margin-right:0;">
+                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">${t2.seed}</span>
+                        <img src="${t2.logo}" class="ticker-logo" onerror="this.style.display='none'">
+                        <span class="ticker-abbr">${t2.abbr}</span>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderBye = (t) => {
+            if (!t) return '';
+            return `
+                <div class="ticker-item matchup-item" style="border-right: 1px solid #4a5568; padding-right: 20px;">
+                     <div class="ticker-team">
+                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">1</span>
                         <img src="${t.logo}" class="ticker-logo" onerror="this.style.display='none'">
                         <span class="ticker-abbr">${t.abbr}</span>
-                    </div>`;
-            });
-            itemsHtml += `</div>`;
+                    </div>
+                    <span class="ticker-label ticker-clinched" style="margin-left:8px;">BYE WEEK</span>
+                </div>
+            `;
         }
 
-        if (eliminated.length > 0) {
-            itemsHtml += `<div class="ticker-item"><span class="ticker-label ticker-eliminated">ELIMINATED:</span>`;
-            eliminated.forEach(t => {
-                itemsHtml += `
-                    <div class="ticker-team">
-                        <img src="${t.logo}" class="ticker-logo" onerror="this.style.display='none'">
-                        <span class="ticker-abbr">${t.abbr}</span>
-                    </div>`;
-            });
-            itemsHtml += `</div>`;
-        }
-        return itemsHtml || '<div class="ticker-item">NO CLINCHING UPDATES</div>';
+        // Build String
+        itemsHtml += renderBye(afc1);
+        itemsHtml += renderMatchup(afc2, afc7);
+        itemsHtml += renderMatchup(afc3, afc6);
+        itemsHtml += renderMatchup(afc4, afc5);
+
+        itemsHtml += renderBye(nfc1);
+        itemsHtml += renderMatchup(nfc2, nfc7);
+        itemsHtml += renderMatchup(nfc3, nfc6);
+        itemsHtml += renderMatchup(nfc4, nfc5);
+
+        return itemsHtml;
     };
 
     const tickerContent = createTickerContent();
