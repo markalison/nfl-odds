@@ -8,7 +8,10 @@ export class Simulator {
         this.teams = teams;
         this.games = games;
         this.completedGames = completedGames;
-        this.ITERATIONS = 1000; // Can bump to 2000-5000 if performance allows
+        this.teams = teams;
+        this.games = games;
+        this.completedGames = completedGames;
+        this.ITERATIONS = 50; // Ultra-safe mode for shared hosting
 
         this.h2hMatrix = this.buildH2HMatrix();
     }

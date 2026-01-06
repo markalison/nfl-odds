@@ -83,49 +83,179 @@ window.renderView = function (viewType) {
 
     if (viewType === 'playoffs') {
         renderBracket(container);
+    } else if (viewType === 'article') {
+        // Param passed as global or argument?
+        // renderView definition needs update to accept param
+        // But ticker calls renderView('article', 'id')
+        // arguments[1] works or update signature
+        renderArticle(arguments[1]);
     } else {
         renderTable(container, viewType);
     }
 }
 
+
+const STORIES = [
+    {
+        id: 'coaching-carousel-2026',
+        title: 'Coaching Carousel: Fans React to Major Shakeups',
+        date: 'January 5, 2026',
+        category: 'League News',
+        image: '/coaching_carousel.jpg',
+        summary: `
+                <p>The NFL coaching landscape shifted dramatically today. We analyzed fan sentiment across Reddit threads to gauge the reaction to the dismissals of Morris, Gannon, Stefanski, and Carroll.</p>
+                <div style="margin-bottom: 8px; border-left: 3px solid #e53e3e; padding-left: 8px;">
+                    <b>Falcons:</b> 95% Approval (Relieved)
+                </div>
+                <div style="margin-bottom: 8px; border-left: 3px solid #b91c1c; padding-left: 8px;">
+                    <b>Cardinals:</b> 85% Approval (Happy)
+                </div>
+                <div style="margin-bottom: 8px; border-left: 3px solid #cbd5e0; padding-left: 8px;">
+                    <b>Raiders:</b> 50% Approval (Respectful)
+                </div>
+            `,
+        fullContent: `
+                <div class="article-container">
+                    <img src="/coaching_carousel.jpg" style="width:100%; height:auto; border-radius:8px; margin-bottom:20px;">
+                    <h1>Coaching Carousel: Fans React to Major Shakeups</h1>
+                    <div class="article-meta">By Jerhyn Sports • January 5, 2026</div>
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                    
+                    <p>The Monday following Week 18 is always a brutal day in the National Football League, but 2026's "Black Monday" has been particularly volatile. With four major organizations deciding to press the reset button, the league landscape has shifted overnight. We took to the team subreddits to gauge the true "Fan Sentiment" for each move.</p>
+                    
+                    <h3>Atlanta Falcons: Raheem Morris Out</h3>
+                    <p><b>Fan Sentiment Score: 95% Approval (Relieved/Happy)</b></p>
+                    <p>The reaction from Atlanta has been almost universally positive. After another season of defensive collapses, the fanbase had reached a breaking point. The top comment on the <a href="https://www.reddit.com/r/falcons" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Falcons megathread</a> simply read: <i>"EVERYONE GET IN HERE!!!!!"</i>. Fans are hopeful for an offensive-minded reset.</p>
+
+                    <h3>Arizona Cardinals: Jonathan Gannon Departs</h3>
+                    <p><b>Fan Sentiment Score: 85% Approval (Relieved)</b></p>
+                    <p>Jonathan Gannon's tenure in the desert ends after a disastrous 9-game losing streak. Cardinals fans on <a href="https://www.reddit.com/r/AZCardinals" target="_blank" style="color: #2563eb; text-decoration: underline;">r/AZCardinals</a> feel vindicated, calling the team's regression "unforgivable." The focus now turns to salvaging Kyler Murray's prime.</p>
+
+                    <h3>Las Vegas Raiders: The Pete Carroll Experiment Ends</h3>
+                    <p><b>Fan Sentiment Score: 65% Approval (Respectful/Ready)</b></p>
+                    <p>The Pete Carroll era in Las Vegas is officially over. While the legendary coach brought a culture shift, the on-field results (6-11) just weren't enough. On <a href="https://www.reddit.com/r/raiders" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Raiders</a>, the sentiment is respectful but firm: "Love Pete, but we need a long-term answer." The image of him in the Silver & Black will remain iconic, but brief.</p>
+
+                    <h3>Cleveland Browns: Stefanski Fired</h3>
+                    <p><b>Fan Sentiment Score: 40% Approval (Angry at Ownership)</b></p>
+                    <p>The vitriol in <a href="https://www.reddit.com/r/Browns" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Browns</a> is palpable, but it's aimed at ownership. While Stefanski was let go, fans see this as another symptom of the Jimmy Haslam era's instability. "It doesn't matter who coaches if the owner is the problem," serves as the rallying cry for a frustrated fanbase.</p>
+                </div>
+            `
+    },
+    {
+        id: 'steelers-ravens-week-18',
+        title: 'AFC North Champions: Steelers Outlast Ravens 26-24',
+        date: 'January 4, 2026',
+        category: 'Division Clincher',
+        image: '/terrible_towel.png',
+        summary: `
+                <p>The <b>Pittsburgh Steelers</b> are AFC North Champions! A 26-yard TD pass from Aaron Rodgers to Calvin Austin sealed the 26-24 win.</p>
+                <p>Drama peaked when Chris Boswell missed the extra point, but Baltimore's last-second 44-yard attempt went wide right.</p>
+            `,
+        fullContent: `
+                <div class="article-container">
+                    <img src="/terrible_towel.png" style="width:100%; height:300px; object-fit:cover; border-radius:8px; margin-bottom:20px; object-position: center;">
+                    <h1>AFC North Champions: Steelers Outlast Ravens</h1>
+                    <div class="article-meta">January 4, 2026</div>
+                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+                    
+                    <p>In a game that will be instantly enshrined in the lore of this bitter rivalry, the <b>Pittsburgh Steelers</b> defeated the <b>Baltimore Ravens</b> 26-24 to capture the 2025 AFC North division title and the conference's No. 4 seed. See the reaction on <a href="https://www.reddit.com/r/steelers" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Steelers</a>.</p>
+                    
+                    <h3>Rodgers to Austin: The Dagger</h3>
+                    <p>With just 1:04 remaining on the clock, <b>Aaron Rodgers</b> fired a strike to <b>Calvin Austin III</b> to put Pittsburgh ahead.</p>
+
+                    <h3>The Missed Point & The Missed Chance</h3>
+                    <p><b>Chris Boswell</b> missed the extra point, giving Baltimore a chance. But rookie kicker Tyler Loop's 44-yard attempt sailed broad right, sealing the <a href="https://www.reddit.com/r/ravens" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Ravens</a> fate.</p>
+                </div>
+            `
+    }
+];
+
 function renderAsideStories() {
     const container = document.getElementById('stories-viewport');
     if (!container) return;
 
-    const stories = [
-        {
-            id: 'steelers-ravens-week-18',
-            title: 'AFC North Champions: Steelers Outlast Ravens 26-24',
-            date: 'January 4, 2026',
-            category: 'Division Clincher',
-            image: '/terrible_towel.png',
-            content: `
-                <p>The <b>Pittsburgh Steelers</b> are officially the 2025 AFC North Champions following a 26-24 victory over the Baltimore Ravens. The win locks Pittsburgh into the <b>No. 4 seed</b> for the AFC playoffs.</p>
-                <p><b>Aaron Rodgers</b> delivered a clutch performance, hitting <b>Calvin Austin</b> for a 26-yard touchdown with just one minute left to play. However, drama ensued when <b>Chris Boswell missed the extra point</b>, leaving Baltimore within field goal range.</p>
-                <p>The Ravens' comeback attempt fell short when <b>Tyler Loop</b> missed a 44-yard field goal as time expired, ensuring the AFC North title stays in Pittsburgh.</p>
-            `,
-            link: '#'
-        }
-    ];
-
-    container.innerHTML = stories.map(s => `
-        <div class="story-card" id="${s.id}" onclick="window.openStory('${s.id}')">
-            ${s.image ? `<img src="${s.image}" class="story-image-header">` : ''}
+    container.innerHTML = STORIES.map(s => `
+        <div class="story-card" id="${s.id}">
+             ${s.image ? `<div onclick="renderArticle('${s.id}')" class="story-link-wrapper"><img src="${s.image}" class="story-image-header"></div>` : ''}
             <div class="story-header">
-                <h2>${s.title}</h2>
+                <div onclick="renderArticle('${s.id}')" class="story-title-link" style="cursor:pointer;"><h2>${s.title}</h2></div>
                 <div class="story-meta">${s.category} | ${s.date}</div>
             </div>
             <div class="story-content">
-                ${s.content}
+                ${s.summary}
+            </div>
+             <div class="story-footer">
+                <div onclick="renderArticle('${s.id}')" class="story-read-more" style="cursor:pointer;">Read Full Story &rarr;</div>
             </div>
         </div>
     `).join('');
 }
 
-window.openStory = (id) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+window.renderArticle = function (id) {
+    const story = STORIES.find(s => s.id === id);
+    if (!story) return;
+
+    // Update URL logic (SPA Routing)
+    // Only push state if we aren't already there (avoids duplicate history entries)
+    const currentPath = window.location.pathname;
+    if (currentPath !== `/article/${id}`) {
+        history.pushState({ view: 'article', id: id }, '', `/article/${id}`);
+    }
+
+    const container = document.getElementById('view-container');
+    document.querySelectorAll('.table-tab-btn').forEach(btn => btn.classList.remove('active'));
+
+    container.innerHTML = `
+            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto;">
+                <button onclick="goBackFromArticle()" style="margin-bottom: 20px; cursor: pointer; border: none; background: none; color: #718096; font-weight: 600;">&larr; Back to Odds</button>
+                ${story.fullContent}
+            </div>
+        `;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 };
+
+window.goBackFromArticle = function () {
+    // Go back in history if possible, else default to league view
+    if (history.state && history.state.view === 'article') {
+        history.back();
+    } else {
+        history.pushState(null, '', '/');
+        renderView('league');
+    }
+}
+
+// Handle Browser Back Button
+window.addEventListener('popstate', (event) => {
+    handleRouting();
+});
+
+function handleRouting() {
+    const path = window.location.pathname;
+    if (path.startsWith('/article/')) {
+        const id = path.split('/')[2];
+        // Render article without pushing state
+        const story = STORIES.find(s => s.id === id);
+        if (story) {
+            const container = document.getElementById('view-container');
+            document.querySelectorAll('.table-tab-btn').forEach(btn => btn.classList.remove('active'));
+            container.innerHTML = `
+                    <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto;">
+                        <button onclick="goBackFromArticle()" style="margin-bottom: 20px; cursor: pointer; border: none; background: none; color: #718096; font-weight: 600;">&larr; Back to Odds</button>
+                        ${story.fullContent}
+                    </div>
+                `;
+        }
+    } else {
+        renderView('league');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await fetchData();
+    // Initial Route Check
+    handleRouting();
+    renderAsideStories();
+});
 
 function renderTable(container, filter) {
     const table = document.createElement('table');
@@ -532,16 +662,17 @@ function renderTicker() {
     const tickerContent = createTickerContent();
 
     // Simple Marquee style - Double the content for seamless wrap
+    // Updated ticker to open article on click
     let html = `
-        <div class="news-ticker" onclick="window.openStory('steelers-ravens-week-18')" style="cursor: pointer;">
-            <div class="ticker-title">THE WIRE</div>
-            <div class="ticker-wrap">
-                <div class="ticker-move">
-                    ${tickerContent}
-                    ${tickerContent}
-                </div>
+    <div class="news-ticker" onclick="renderView('article', 'steelers-ravens-week-18')" style="cursor: pointer;">
+        <div class="ticker-title">THE WIRE</div>
+        <div class="ticker-wrap">
+            <div class="ticker-move">
+                ${tickerContent}
+                ${tickerContent}
             </div>
         </div>
-    `;
+    </div>
+`;
     container.innerHTML = html;
 }

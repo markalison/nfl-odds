@@ -230,6 +230,22 @@ app.post('/api/simulate', async (req, res) => {
     res.json(results);
 });
 
+// SPA Fallback: Serve index.html for any unknown route (so /article/:id works)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
+
+    // DELAY heavy lifting to let the process stabilize and satisfy any health checks
+    setTimeout(() => {
+        console.log("Pre-fetching data to warm up cache...");
+        const start = Date.now();
+        refreshData().then(() => {
+            console.log(`Data initialized in ${((Date.now() - start) / 1000).toFixed(2)}s`);
+        }).catch(err => {
+            console.error("Startup cache warmup failed:", err);
+        });
+    }, 2000);
 });
