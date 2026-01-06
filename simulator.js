@@ -49,6 +49,7 @@ export class Simulator {
                 seed5: 0,
                 seed6: 0,
                 seed7: 0,
+                wonSuperBowl: 0,
                 totalSims: 0
             };
         });
@@ -56,123 +57,41 @@ export class Simulator {
         const start = performance.now();
 
         // 1. Pre-process games based on overrides
-        // We create a "Scenario" games list where some games are already fixed.
-        // And we update the "Base Standings" for the simulation start.
-
         let simBaseTeams = JSON.parse(JSON.stringify(this.teams));
-        let simGames = []; // Games that still need to be simulated (randomly)
 
-        for (const game of this.games) {
-            const homeSel = userOverrides[game.homeId];
-            const awaySel = userOverrides[game.awayId];
-
-            let fixedWinner = null; // 'home', 'away', 'tie', or null (random)
-
-            // Logic for overrides
-            // If Home is set to 'win' -> Home Win
-            // If Home is set to 'loss' -> Away Win
-            // If Home is 'out' -> Home Win
-
-            // Conflict resolution: if both say 'win', treat as toss up? Or prioritize user?
-            // Let's assume user is consistent or last click wins.
-            // Actually, we process a prioritized hierarchy or just simple logic.
-
-            if (homeSel === 'win' || homeSel === 'out') fixedWinner = 'home';
-            if (homeSel === 'loss') fixedWinner = 'away';
-            if (homeSel === 'tie') fixedWinner = 'tie';
-
-            // Away overrides might overwrite Home (if user clicked Away Win last? We don't know order)
-            // But let's check:
-            if (awaySel === 'win' || awaySel === 'out') {
-                if (fixedWinner === 'home') fixedWinner = null; // Conflict -> Random?
-                else fixedWinner = 'away';
-            }
-            if (awaySel === 'loss') {
-                if (fixedWinner === 'away') fixedWinner = null;
-                else fixedWinner = 'home';
-            }
-            if (awaySel === 'tie') fixedWinner = 'tie';
-
-            // Next Game Logic: User only sets ONE "Next Result", not "Win Out" usually.
-            // BUT user requested "Win Out" option.
-            // If "Win Out" is selected, it applies to ALL future games for that team.
-
-            // NOTE: The previous UI had "Win/Loss" for *Next Game*. 
-            // V2 Request: "replace out with tie" -> Actually user said "replace out with tie" but also "option for win out".
-            // Wait, "add option for win out" was in original prompt. V2 request says "replace the out option with tie".
-            // So maybe we drop Win Out? Or have Win / Loss / Tie.
-            // Let's support: Win (Next), Loss (Next), Tie (Next).
-            // Win Out might be dropped based on "replace the out option with tie".
-            // I will stick to Win/Loss/Tie for specific next game, or maybe global.
-            // Actually, usually these simulators allow picking ANY game. 
-            // For this UI, we only have row buttons. So it implies "Next Game".
-
-            // Handling "Next Game" specifically:
-            // We need to know if this is the "Next Game" for these teams.
-            // We'll iterate games chronologically. If it's the first unplayed game for a team with an override, apply it.
-
-            // To do this correctly: SimGames needs to differentiate "Fully fixed" vs "Play it".
-            // But for efficiency, if fixed, we just update simBaseTeams stats and don't put it in simGames loop.
-
-            // Let's allow global override for now: if userOverride[id] is set, we try to apply it to *applicable* games.
-            // Since buttons are on rows, we treat it as "Next Game Only" or "All"? 
-            // V1 was "Next Game". V2 says "replace out with tie".
-            // So Win / Loss / Tie for Next Game.
-
-            // How to identify Next Game? 
-            // We can sort games by id (proxy for time) or find lowest week.
-            // Assuming `this.games` is sorted-ish.
-
-            // Let's just create a quick map of "Games to Fix"
-            // If userOverrides[teamId] is set, we fix their *earliest* game.
-
-        }
-
-        // Better approach for overrides in Monte Carlo:
-        // We handle overrides inside the loop? No, that's slow.
-        // We apply overrides ONCE to the `simBaseTeams` and remove those games from `simGames`.
-
-        // 1. Identify "Next Games" for teams with overrides
-        const teamNextGameId = {}; // teamId -> gameId
-        // Find next game for each team
+        // Identify "Next Games" for overrides
+        const teamNextGameId = {};
         for (const game of this.games) {
             if (!teamNextGameId[game.homeId]) teamNextGameId[game.homeId] = game.id;
             if (!teamNextGameId[game.awayId]) teamNextGameId[game.awayId] = game.id;
         }
 
-        const fixedGames = {}; // gameId -> 'home' | 'away' | 'tie'
-
+        const fixedGames = {};
         for (const [teamId, action] of Object.entries(userOverrides)) {
             if (action === 'none') continue;
-
             const gId = teamNextGameId[teamId];
-            if (!gId) continue; // No games left
-
-            const game = this.games.find(g => g.id === gId);
-            if (!game) continue; // Should not happen
-
-            // Determine outcome
-            let outcome = null;
-            if (teamId === game.homeId) {
-                if (action === 'win') outcome = 'home';
-                if (action === 'loss') outcome = 'away';
-                if (action === 'tie') outcome = 'tie';
-            } else {
-                if (action === 'win') outcome = 'away';
-                if (action === 'loss') outcome = 'home';
-                if (action === 'tie') outcome = 'tie';
+            if (gId) {
+                const game = this.games.find(g => g.id === gId);
+                if (game) {
+                    let outcome = null;
+                    if (teamId === game.homeId) {
+                        if (action === 'win') outcome = 'home';
+                        else if (action === 'loss') outcome = 'away';
+                        else if (action === 'tie') outcome = 'tie';
+                    } else {
+                        if (action === 'win') outcome = 'away';
+                        else if (action === 'loss') outcome = 'home';
+                        else if (action === 'tie') outcome = 'tie';
+                    }
+                    if (outcome) fixedGames[gId] = outcome;
+                }
             }
-
-            if (outcome) fixedGames[gId] = outcome;
         }
 
-        // Apply fixed games to SimBase
         const gamesToSimulate = [];
-
         for (const game of this.games) {
             if (fixedGames[game.id]) {
-                const outcome = fixedGames[game.id];
-                this.updateStandings(simBaseTeams, game.homeId, game.awayId, outcome);
+                this.updateStandings(simBaseTeams, game.homeId, game.awayId, fixedGames[game.id]);
             } else {
                 gamesToSimulate.push(game);
             }
@@ -180,81 +99,56 @@ export class Simulator {
 
         // 2. Run Iterations
         for (let i = 0; i < this.ITERATIONS; i++) {
-            // Clone teams from the "Post-Overrides" Base
-            // Using a lighter clone if possible, but JSON parse/stringify is robust for deep structure
-            // Performance trick: strict structure array?
-            // For 32 teams it's fast enough.
             const runTeams = JSON.parse(JSON.stringify(simBaseTeams));
 
             // Sim remaining games
             for (const game of gamesToSimulate) {
                 const homeT = runTeams[game.homeId];
                 const awayT = runTeams[game.awayId];
+                if (!homeT || !awayT) continue;
 
-                if (!homeT || !awayT) continue; // Safety skip
-
-                // Dynamic Rating-Based Probability using Live Stats
-                // Rating = (PF - PA) / GamesPlayed  (Simple Margin of Victory Model)
-                // If gamesPlayed is low (e.g. 0), use 0 rating (average)
-
-                const getLiveRating = (t) => {
-                    // Start with weighted baseline if needed, or pure live?
-                    // Pure live needs a few games to stabilize.
-                    // Fallback to 0 if no games.
-                    if (!t.stats || t.stats.gamesPlayed === 0) return 0;
-                    return (t.stats.pointsFor - t.stats.pointsAgainst) / t.stats.gamesPlayed;
-                };
-
-                const rHome = getLiveRating(homeT);
-                const rAway = getLiveRating(awayT);
-
-                // Debug log for first few sims
-                // if (Math.random() < 0.001) console.log(`Sim Debug: ${homeT.abbr} (${rHome.toFixed(2)}) vs ${awayT.abbr} (${rAway.toFixed(2)}) -> Prob: ${probHome.toFixed(2)}`);
-
-                // Diff = Home - Away + HomeAdv
-                // Rating is "Points better than average opponent" roughly
-                const spread = rHome - rAway + HOME_ADVANTAGE;
-
-                // Logistic Function for Win Probability
-                // P = 1 / (1 + 10^(-Spread / K))
-
-                const probHome = 1 / (1 + Math.pow(10, -(spread / 16)));
-
-                // Check if prob is NaN
-                if (isNaN(probHome)) {
-                    // console.error(`NaN Prob: spread=${spread} rHome=${rHome} rAway=${rAway}`);
-                    continue;
-                }
-
-                // Run Sim
-                const r = Math.random();
-                let result = 'tie';
-
-                const tieProb = 0.003;
-
-                if (r < probHome - (tieProb / 2)) result = 'home';
-                else if (r > probHome + (tieProb / 2)) result = 'away';
-                else result = 'tie';
-
+                const result = this.simulateMatchup(homeT, awayT);
                 this.updateStandings(runTeams, game.homeId, game.awayId, result);
             }
 
-            // 3. Determine Playoff Seeds for this iteration
-            this.processPlayoffSeeds(runTeams, results);
+            // 3. Determine Playoff Seeds
+            const { afcSeeds, nfcSeeds } = this.processPlayoffSeeds(runTeams, results);
+
+            // 4. Simulate Playoffs (New)
+            this.simulatePlayoffs(afcSeeds, nfcSeeds, results);
         }
 
-        // Set totalSims for all (since we ran ITERATIONS)
+        // Set totalSims
         Object.keys(results).forEach(id => {
             results[id].totalSims = this.ITERATIONS;
         });
-
-        // Debug output
-        // console.log("Sim Done. Results sample:", results[Object.keys(results)[0]]);
 
         const end = performance.now();
         console.log(`Simulation x${this.ITERATIONS} took ${(end - start).toFixed(2)} ms`);
 
         return results;
+    }
+
+    simulateMatchup(homeT, awayT) {
+        // Dynamic Rating-Based Probability using Live Stats
+        const getLiveRating = (t) => {
+            if (!t.stats || t.stats.gamesPlayed === 0) return 0;
+            return (t.stats.pointsFor - t.stats.pointsAgainst) / t.stats.gamesPlayed;
+        };
+
+        const rHome = getLiveRating(homeT);
+        const rAway = getLiveRating(awayT);
+        const spread = rHome - rAway + HOME_ADVANTAGE;
+        const probHome = 1 / (1 + Math.pow(10, -(spread / 16)));
+
+        if (isNaN(probHome)) return 'tie'; // Fallback
+
+        const r = Math.random();
+        const tieProb = 0.003; // Regular season tie prob
+
+        if (r < probHome - (tieProb / 2)) return 'home';
+        else if (r > probHome + (tieProb / 2)) return 'away';
+        else return 'tie';
     }
 
     getWinPct(team) {
@@ -264,26 +158,12 @@ export class Simulator {
     }
 
     updateStandings(teams, homeId, awayId, result) {
-        // Need to simulate a score to update PF/PA?
-        // For pure W/L tracking, we don't strictly *need* to update PF/PA for the *ranking* unless we use Margin of Victory in tiebreakers.
-        // BUT if we want "Momentum" or "Updated Ratings" during the season sim?
-        // Usually Monte Carlo keeps rating static or simple.
-        // Let's keep ratings static for the simulation run to avoid feedback loops unless desired.
-        // However, we MUST track W/L for standings.
-        // And records.
-
-        // Simulating score for stats?
-        // Let's just track W/L/T for the records sorting.
-        // If we wanted to go deep, we'd generate a score like 24-20 using the spread.
-        // For now, simpler is faster.
-
         teams[homeId].stats.gamesPlayed++;
         teams[awayId].stats.gamesPlayed++;
 
         if (result === 'home') {
             teams[homeId].record.wins++;
             teams[awayId].record.losses++;
-            // Update Div/Conf if applicable (simplified: assume we track it strictly or approx)
             if (teams[homeId].division === teams[awayId].division) {
                 teams[homeId].divRecord.wins++;
                 teams[awayId].divRecord.losses++;
@@ -306,7 +186,6 @@ export class Simulator {
     }
 
     processPlayoffSeeds(teams, results) {
-        // Separate into AFC/NFC
         const afc = [];
         const nfc = [];
 
@@ -315,65 +194,121 @@ export class Simulator {
             else if (t.conference === 'NFC') nfc.push(t);
         });
 
-        // H2H tracking for this run is not passed.
-        // We accept that limitation for now (using historical + Records).
-        this.rankConference(afc, results, null);
-        this.rankConference(nfc, results, null);
+        const afcSeeds = this.rankConference(afc, results, null);
+        const nfcSeeds = this.rankConference(nfc, results, null);
+        return { afcSeeds, nfcSeeds };
     }
 
     rankConference(confTeams, results, runH2H) {
-        // Group by Division
         const divisions = {};
         confTeams.forEach(t => {
             if (!divisions[t.division]) divisions[t.division] = [];
             divisions[t.division].push(t);
         });
 
-        // Find Division Winners
         const divWinners = [];
         const wildCards = [];
 
         for (const divName in divisions) {
-            // Sort division
             const dTeams = divisions[divName];
-            // Sort primarily by WinPCT, then Break Ties
-            // We use a custom sort logic that calls breakTies for equals
-
-            // Strategy: Group by WinPct, then resolve each group
-            // Quick sort by Pct descending
             dTeams.sort((a, b) => this.getWinPct(b) - this.getWinPct(a));
-
-            // Resolve ties
             const ranked = this.resolveTies(dTeams, runH2H, 'division');
-
-            const winner = ranked[0];
-            divWinners.push(winner);
-            results[winner.id].wonDivision++;
-
-            // Rest are wildcards
+            divWinners.push(ranked[0]);
+            results[ranked[0].id].wonDivision++;
             for (let i = 1; i < ranked.length; i++) wildCards.push(ranked[i]);
         }
 
-        // Sort Div Winners (Seeds 1-4)
         const rankedWinners = this.resolveTies(divWinners, runH2H, 'conference');
         rankedWinners.forEach((t, idx) => {
-            if (t) {
-                const seed = idx + 1;
-                this.recordSeed(results, t.id, seed);
-            }
+            if (t) this.recordSeed(results, t.id, idx + 1);
         });
 
-        // Sort Wildcards (Seeds 5-7)
-        // Correct logic: Iterative reduction
         const rankedWildCards = this.iterativeWildCardSort(wildCards);
-
-        // Top 3 wildcards make playoffs
         for (let i = 0; i < 3; i++) {
             if (rankedWildCards[i]) {
-                const seed = 4 + 1 + i; // 5, 6, 7
-                this.recordSeed(results, rankedWildCards[i].id, seed);
+                this.recordSeed(results, rankedWildCards[i].id, 4 + 1 + i);
             }
         }
+
+        // Return ordered seeds 1-7 (filter nulls)
+        const seeds = [];
+        for (let i = 0; i < 4; i++) if (rankedWinners[i]) seeds.push(rankedWinners[i]);
+        for (let i = 0; i < 3; i++) if (rankedWildCards[i]) seeds.push(rankedWildCards[i]);
+        return seeds;
+    }
+
+    simulatePlayoffs(afcSeeds, nfcSeeds, results) {
+        if (afcSeeds.length < 7 || nfcSeeds.length < 7) return; // Not enough teams?
+
+        // Helper for independent game
+        const play = (t1, t2) => {
+            // Force a winner (no ties in playoffs)
+            // Using existing rating logic but ignore ties
+            // Or simpler: higher seed favored? 
+            // Let's use the rate-based simulateMatchup but force binary
+            // Home field advantage for higher seed (better seed = lower index)
+            // t1 is usually better seed in this logic? We will pass (Home, Away)
+            let winner = this.simulateMatchup(t1, t2);
+            while (winner === 'tie') winner = Math.random() < 0.5 ? 'home' : 'away';
+            return winner === 'home' ? t1 : t2;
+        };
+
+        const runConf = (seeds) => {
+            // Wild Card Round
+            // 2 vs 7, 3 vs 6, 4 vs 5
+            const w2v7 = play(seeds[1], seeds[6]); // Seed 2 (index 1) vs Seed 7 (index 6)
+            const w3v6 = play(seeds[2], seeds[5]);
+            const w4v5 = play(seeds[3], seeds[4]);
+
+            // Divisional Round
+            // 1 seed plays lowest remaining seed
+            // We have 1, plus 3 winners.
+            const living = [seeds[0], w2v7, w3v6, w4v5];
+            // Sort by original seed index to find lowest?
+            // Actually, we can just look at their original seed property if we stored it, or index in `seeds` array.
+            // Let's rely on the fact that `seeds` is sorted 1-7. 
+            // We need to map back to seed index.
+            const getSeedIdx = (t) => seeds.findIndex(s => s.id === t.id);
+
+            // Sort living by seed index (Ascending = Better seed)
+            living.sort((a, b) => getSeedIdx(a) - getSeedIdx(b));
+
+            // Divisional Matchups
+            // 1st (Best, Seed 1) vs 4th (Worst)
+            // 2nd vs 3rd
+            const div1 = play(living[0], living[3]);
+            const div2 = play(living[1], living[2]);
+
+            // Conference Championship
+            // Higher seed hosts (lower index in `seeds` list)
+            const c1 = div1;
+            const c2 = div2;
+            // Determine host
+            const idx1 = getSeedIdx(c1);
+            const idx2 = getSeedIdx(c2);
+
+            const confWinner = idx1 < idx2 ? play(c1, c2) : play(c2, c1);
+            return confWinner;
+        };
+
+        const afcChamp = runConf(afcSeeds);
+        const nfcChamp = runConf(nfcSeeds);
+
+        // Super Bowl (Neutral Site - Neutralize Home Field?)
+        // For simplicity, we just run it. Maybe give small Home Advantage to better record?
+        // Or just pure rating. 
+        // Let's use play(afc, nfc) but potentially negate HOME_ADVANTAGE inside simulateMatchup?
+        // simulateMatchup uses `HOME_ADVANTAGE` constant.
+        // We can just accept it or effectively randomize who is "Home".
+        // Let's randomize "Home" assignment for SB.
+
+        // Wait, simulateMatchup uses `HOME_ADVANTAGE` global.
+        // Let's just run it. Random home team for SB.
+        let sbWinner;
+        if (Math.random() < 0.5) sbWinner = play(afcChamp, nfcChamp);
+        else sbWinner = play(nfcChamp, afcChamp);
+
+        results[sbWinner.id].wonSuperBowl++;
     }
 
     getConferenceSeeds(confTeams) {

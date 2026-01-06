@@ -265,16 +265,13 @@ function renderTable(container, filter) {
     const thead = document.createElement('thead');
     thead.innerHTML = `
         <tr>
-        <tr>
             <th class="col-team" onclick="changeSort('team')">Team ${getSortArrow('team')}</th>
             <th class="col-record" onclick="changeSort('record')">Record ${getSortArrow('record')}</th>
             <th class="col-confdiv">Conf/Div</th>
             <th class="col-playoff" onclick="changeSort('playoff')">Playoffs ${getSortArrow('playoff')}</th>
             <th class="col-division" onclick="changeSort('div')">Win Div ${getSortArrow('div')}</th>
             <th class="col-seed1" onclick="changeSort('seed1')">Bye ${getSortArrow('seed1')}</th>
-            <th class="col-sb">Super Bowl</th>
-            <th class="col-cb">Sim</th>
-        </tr>
+            <th class="col-sb" onclick="changeSort('sb')">Super Bowl ${getSortArrow('sb')}</th>
         </tr>
     `;
     table.appendChild(thead);
@@ -309,13 +306,13 @@ function renderTable(container, filter) {
 
         const tr = document.createElement('tr');
 
-        // Sim Data formatting
-        const sim = team.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0 };
+        const sim = team.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
         const total = sim.totalSims || 1;
 
         const pPlayoff = (sim.madePlayoffs / total * 100).toFixed(1);
         const pDiv = (sim.wonDivision / total * 100).toFixed(1);
         const pSeed1 = (sim.seed1 / total * 100).toFixed(1);
+        const pSB = (sim.wonSuperBowl / total * 100).toFixed(1);
 
         // Colors
         const cellColor = (val) => {
@@ -325,21 +322,6 @@ function renderTable(container, filter) {
             const alpha = v / 100;
             return `background-color: rgba(66, 153, 225, ${alpha}); color: ${v > 50 ? 'white' : 'black'};`;
         };
-
-        const hasNextGame = nextGameMap[team.id];
-
-        let actionsHtml = '';
-        if (hasNextGame) {
-            actionsHtml = `
-                 <div class="action-btn-group">
-                    <button class="action-btn ${isSel(team.id, 'win')}" onclick="userAction('${team.id}', 'win')">W</button>
-                    <button class="action-btn ${isSel(team.id, 'loss')}" onclick="userAction('${team.id}', 'loss')">L</button>
-                    <button class="action-btn ${isSel(team.id, 'tie')}" onclick="userAction('${team.id}', 'tie')">T</button>
-                 </div>
-             `;
-        } else {
-            actionsHtml = `<span style="color:#cbd5e0; font-size:12px;">Season Complete</span>`;
-        }
 
         tr.innerHTML = `
             <td class="team-cell">
@@ -354,11 +336,7 @@ function renderTable(container, filter) {
             <td class="heatmap-cell" style="${cellColor(pPlayoff)}">${pPlayoff}%</td>
             <td class="heatmap-cell" style="${cellColor(pDiv)}">${pDiv}%</td>
             <td class="heatmap-cell" style="${cellColor(pSeed1)}">${pSeed1}%</td>
-            <td class="heatmap-cell" style="">-</td>
-
-            <td class="actions-cell">
-                 ${actionsHtml}
-            </td>
+            <td class="heatmap-cell" style="${cellColor(pSB)}">${pSB}%</td>
         `;
 
         tbody.appendChild(tr);
@@ -517,8 +495,8 @@ function getSortedTeams(teams, filter) {
 
         // Feature Sort
         let valA, valB;
-        const simA = a.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0 };
-        const simB = b.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0 };
+        const simA = a.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
+        const simB = b.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
         const totalA = simA.totalSims || 1;
         const totalB = simB.totalSims || 1;
 
@@ -540,9 +518,22 @@ function getSortedTeams(teams, filter) {
             case 'seed1':
                 valA = simA.seed1 / totalA; valB = simB.seed1 / totalB;
                 break;
+            case 'sb':
+                valA = simA.wonSuperBowl / totalA; valB = simB.wonSuperBowl / totalB;
+                break;
             default:
                 valA = getWinPct(a); valB = getWinPct(b);
         }
+
+        if (Math.abs(valA - valB) > 0.0001) {
+            if (valA < valB) return CURRENT_SORT.dir === 'asc' ? -1 : 1;
+            if (valA > valB) return CURRENT_SORT.dir === 'asc' ? 1 : -1;
+        }
+
+        // Tiebreaker: Sort by Record Wins Descending (for non-playoff / 0% teams)
+        const winsA = a.record.wins + 0.5 * a.record.ties;
+        const winsB = b.record.wins + 0.5 * b.record.ties;
+        return winsB - winsA;
 
         if (valA < valB) return CURRENT_SORT.dir === 'asc' ? -1 : 1;
         if (valA > valB) return CURRENT_SORT.dir === 'asc' ? 1 : -1;
