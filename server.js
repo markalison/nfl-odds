@@ -25,6 +25,7 @@ let cache = {
     completed: [],     // Review: Added completed games
     lastFetch: 0
 };
+let simCache = new Map(); // Global cache for established projections
 const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
 
 const AXIOS_CONFIG = {
@@ -230,6 +231,7 @@ async function refreshData() {
         cache.schedule = schedule;
         cache.completed = completedGames; // Store completed games
         cache.lastFetch = now;
+        simCache.clear(); // Clear all established projections when data refreshes
 
     } catch (e) {
         console.error("Error fetching data:", e.message);
@@ -246,11 +248,27 @@ app.get('/api/data', async (req, res) => {
 app.post('/api/simulate', async (req, res) => {
     const userOverrides = req.body.overrides || {};
     await refreshData();
+
+    // Generate a cache key from overrides
+    // Sorting keys ensures different orders of same overrides result in same key
+    const cacheKey = JSON.stringify(Object.keys(userOverrides).sort().reduce((obj, key) => {
+        obj[key] = userOverrides[key];
+        return obj;
+    }, {}));
+
+    if (simCache.has(cacheKey)) {
+        console.log("Serving ESTABLISHED projection from cache.");
+        return res.json(simCache.get(cacheKey));
+    }
+
     // Pass completed games to Simulator
-    // Filter out Postseason games from schedule for "Making Playoffs" simulation
     const regSeasonSchedule = cache.schedule.filter(g => !g.isPlayoff);
     const sim = new Simulator(cache.teams, regSeasonSchedule, cache.completed);
+
+    console.log("Generating NEW established projection (1000 sims)...");
     const results = sim.run(userOverrides);
+
+    simCache.set(cacheKey, results);
     res.json(results);
 });
 

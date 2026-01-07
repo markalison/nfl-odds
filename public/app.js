@@ -7,7 +7,8 @@ let GLOBAL_DATA = {
 };
 let CURRENT_VIEW = 'league';
 let CURRENT_SORT = { field: 'playoff', dir: 'desc' };
-let USER_OVERRIDES = {}; // { teamId: 'win'|'loss'|'tie' }
+let USER_OVERRIDES = JSON.parse(localStorage.getItem('nfl_overrides') || '{}');
+let USER_ARROWS = JSON.parse(localStorage.getItem('nfl_arrows') || '{}');
 
 document.addEventListener('DOMContentLoaded', async () => {
     await fetchData();
@@ -64,7 +65,9 @@ async function runSimulation() {
     Object.keys(USER_ARROWS).forEach(matchupKey => {
         overrides[matchupKey] = USER_ARROWS[matchupKey];
     });
-    console.log("Overrides sent to simulation:", overrides);
+    localStorage.setItem('nfl_overrides', JSON.stringify(USER_OVERRIDES));
+    localStorage.setItem('nfl_arrows', JSON.stringify(USER_ARROWS));
+    console.log("Overrides saved to localStorage. Sent to simulation:", overrides);
 
     try {
         const res = await fetch('/api/simulate', {
@@ -304,7 +307,7 @@ function isSel(tid, act) {
 }
 
 // Interactive Bracket State
-let USER_ARROWS = {}; // Store user picks: { gameId: winnerId }
+// Initialized from localStorage at top of file
 
 async function previewMatchup(homeId, awayId) {
     const modal = document.getElementById('preview-modal');

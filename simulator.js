@@ -11,7 +11,7 @@ export class Simulator {
         this.teams = teams;
         this.games = games;
         this.completedGames = completedGames;
-        this.ITERATIONS = 50; // Ultra-safe mode for shared hosting
+        this.ITERATIONS = 1000; // Increased for target accuracy and stability
 
         this.h2hMatrix = this.buildH2HMatrix();
     }
