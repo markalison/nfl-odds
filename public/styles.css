@@ -184,6 +184,7 @@ tbody td.team-cell {
     padding: 6px 16px;
     border-radius: 6px;
     border: none;
+    cursor: pointer;
     transition: all 0.2s;
 }
 
@@ -403,187 +404,7 @@ tbody td.record-cell {
     font-style: italic;
 }
 
-/* --- News Ticker (Extracted) --- */
-.news-ticker {
-    display: flex;
-    background: #1a202c;
-    color: #fff;
-    font-family: 'Roboto', sans-serif;
-    height: 48px;
-    overflow: hidden;
-    margin-bottom: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-}
-
-.ticker-title {
-    background: #c53030;
-    color: #fff;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    font-weight: 800;
-    font-size: 14px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    z-index: 2;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-}
-
-.ticker-wrap {
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    align-items: center;
-    background: #2d3748;
-    mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-    -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
-}
-
-.ticker-move {
-    display: flex;
-    align-items: center;
-    white-space: nowrap;
-    animation: ticker-scroll 45s linear infinite;
-    /* Slowed down from 15s */
-}
-
-/* Pause on hover */
-.ticker-wrap:hover .ticker-move {
-    animation-play-state: paused;
-}
-
-.ticker-item {
-    display: flex;
-    align-items: center;
-    margin-right: 40px;
-    padding-left: 10px;
-}
-
-.ticker-item img {
-    height: 18px;
-    width: 18px;
-    object-fit: contain;
-}
-
-.ticker-team {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-right: 15px;
-}
-
-.ticker-label {
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    margin-right: 12px;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: rgba(0, 0, 0, 0.2);
-}
-
-.ticker-label.ticker-clinched {
-    color: #48bb78;
-    border: 1px solid #48bb78;
-}
-
-.ticker-label.ticker-eliminated {
-    color: #f56565;
-    border: 1px solid #f56565;
-}
-
-.ticker-abbr {
-    font-weight: 700;
-    font-size: 14px;
-}
-
-@keyframes ticker-scroll {
-    0% {
-        transform: translate3d(0, 0, 0);
-    }
-
-    100% {
-        transform: translate3d(-50%, 0, 0);
-    }
-}
-
-/* --- Key Games / Matchups --- */
-.games-scroll-container {
-    display: flex;
-    gap: 15px;
-    overflow-x: auto;
-    padding-bottom: 5px;
-}
-
-.game-card-inner {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-bottom: 8px;
-}
-
-.team-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.team-info {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.team-info img {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-}
-
-.team-name-sm {
-    font-weight: 600;
-    font-size: 13px;
-}
-
-.prob-badge {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px;
-    background: #edf2f7;
-    color: #718096;
-}
-
-.prob-badge.high {
-    background: #c6f6d5;
-    color: #22543d;
-}
-
-.prob-bar-container {
-    margin-top: 5px;
-    width: 100%;
-    height: 6px;
-    background: #e2e8f0;
-    border-radius: 3px;
-    overflow: hidden;
-    display: flex;
-}
-
-.stake-footer {
-    display: flex;
-    flex-direction: column;
-    font-size: 10px;
-    color: #718096;
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px solid #e2e8f0;
-}
-
-.stake-line {
-    margin-bottom: 2px;
-}
+/* Ticker and Key Games styles removed */
 
 /* --- Still In The Hunt --- */
 .alive-section {
@@ -707,12 +528,10 @@ tbody td.record-cell {
     }
 }
 
-/* --- Stories & Layout --- */
+/* Layout styles simplified */
 .app-layout {
-    display: flex;
-    gap: 30px;
+    display: block;
     margin-top: 20px;
-    align-items: flex-start;
 }
 
 .main-area {
@@ -781,96 +600,15 @@ tbody td.record-cell {
     background: #2d3748;
 }
 
-.story-header {
-    background: transparent;
-    color: #1a202c;
-    padding: 15px;
-    border-bottom: 1px solid #f1f5f9;
-}
+/* Stories styles removed */
 
-.story-header h2 {
-    margin: 0;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1.3;
-}
-
-.story-meta {
-    font-size: 10px;
-    color: #94a3b8;
-    text-transform: uppercase;
-    margin-top: 4px;
-    letter-spacing: 0.5px;
-}
-
-.story-content {
-    padding: 15px;
-    line-height: 1.5;
-    color: #475569;
-    font-size: 13px;
-}
-
-.story-content p {
-    margin-bottom: 10px;
-}
-
-.story-content b {
-    color: #1e293b;
-}
-
-.story-footer {
-    padding: 10px 15px;
-    background: #f8fafc;
-    border-top: 1px solid #f1f5f9;
-}
-
-.story-link-btn {
-    text-decoration: none;
-    color: #2563eb;
-    font-weight: 700;
-    font-size: 11px;
-}
-
-/* New Link Styles */
-.story-title-link {
-    text-decoration: none;
-    color: inherit;
-    transition: color 0.2s;
-}
-
-.story-title-link:hover {
-    color: #2563eb;
-}
-
-.story-link-wrapper {
-    display: block;
-    cursor: pointer;
-}
-
-.story-read-more {
-    display: inline-block;
-    text-decoration: none;
-    color: #2563eb;
-    font-weight: 700;
-    font-size: 12px;
-    transition: transform 0.2s;
-}
-
-.story-read-more:hover {
-    transform: translateX(4px);
-}
-
+/* Media query for app layout simplified */
 @media (max-width: 1100px) {
     .app-layout {
-        flex-direction: column;
-    }
-
-    .stories-aside {
-        width: 100%;
-        position: static;
-        max-height: none;
+        display: block;
     }
 }
+
 /* Antigravity Footer */
 .antigravity-footer {
     display: flex;
@@ -902,3 +640,214 @@ tbody td.record-cell {
     letter-spacing: -0.5px;
 }
 
+
+/* --- Scoreboard Strip (New) --- */
+/* Scoreboard styles removed */
+
+/* Interactive Bracket */
+.bracket-wrapper {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    overflow-x: auto;
+    background: #1a202c;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.bracket-round {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 200px;
+    justify-content: center;
+}
+
+.bracket-round h3 {
+    text-align: center;
+    color: #a0aec0;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.bracket-node {
+    background: #2d3748;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    position: relative;
+    transition: transform 0.2s;
+}
+
+.bracket-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.node-team {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #e2e8f0;
+    transition: background 0.2s;
+}
+
+.node-team:hover {
+    background: #4a5568;
+}
+
+.node-team.picked {
+    background: #2b6cb0;
+    color: #fff;
+    border-left: 3px solid #63b3ed;
+}
+
+.node-logo {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.node-vs {
+    text-align: center;
+    font-size: 10px;
+    color: #718096;
+    margin: -2px 0;
+}
+
+.preview-btn-sm {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(0, 0, 0, 0.3);
+    border: none;
+    color: #cbd5e0;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.preview-btn-sm:hover {
+    background: #4a5568;
+    color: #fff;
+}
+
+/* Preview Modal */
+#preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    /* Flex when active */
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+#preview-content {
+    background: #2d3748;
+    width: 90%;
+    max-width: 600px;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    color: #fff;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #4a5568;
+}
+
+.team-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 40%;
+}
+
+.team-logo-lg {
+    width: 60px;
+    height: 60px;
+}
+
+.vs-col {
+    font-size: 24px;
+    font-weight: bold;
+    color: #718096;
+}
+
+.stats-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1a202c;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.stat-val {
+    width: 60px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: #a0aec0;
+}
+
+.stat-val.better {
+    color: #48bb78;
+    /* Green */
+}
+
+.stat-label {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    color: #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.preview-footer {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.close-btn {
+    background: #e2e8f0;
+    color: #1a202c;
+    border: none;
+    padding: 8px 24px;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.close-btn:hover {
+    background: #fff;
+}

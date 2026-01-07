@@ -40,7 +40,7 @@ export class Simulator {
         Object.keys(this.teams).forEach(id => {
             results[id] = {
                 id: id,
-                madePlayoffs: 0,
+                madePlayoffs: 0, // === Reached WC Round
                 wonDivision: 0,
                 seed1: 0,
                 seed2: 0,
@@ -49,15 +49,22 @@ export class Simulator {
                 seed5: 0,
                 seed6: 0,
                 seed7: 0,
+                madeDivisional: 0,
+                madeConference: 0,
+                madeSuperBowl: 0,
                 wonSuperBowl: 0,
                 totalSims: 0
             };
         });
 
+
         const start = performance.now();
+        const gameStats = {}; // { [gameId]: { homeWins: 0, total: 0 } }
+        const matchupStats = {}; // { [round]: { [matchupKey]: { count, p1, p2 } } }
 
         // 1. Pre-process games based on overrides
         let simBaseTeams = JSON.parse(JSON.stringify(this.teams));
+
 
         // Identify "Next Games" for overrides
         const teamNextGameId = {};
@@ -67,8 +74,34 @@ export class Simulator {
         }
 
         const fixedGames = {};
-        for (const [teamId, action] of Object.entries(userOverrides)) {
+        const playoffOverrides = {};
+
+        for (const [key, action] of Object.entries(userOverrides)) {
             if (action === 'none') continue;
+
+            // Check if key is a Playoff Matchup Key (e.g. "BUF-KC")
+            // IDs are usually numeric strings. Matchups are "ABBR-ABBR".
+            // Or "sortedId" from frontend.
+            if (key.includes('-')) {
+                // It's a playoff override. Value is "WinnerID" (as passed by frontend `updateSimWithOverride` -> `runSimulation` -> `fetch`)
+                // But wait, `runSimulation` sends `overrides = { [winnerId]: 'win' }` ???
+                // NO, `userAction` does `USER_OVERRIDES[teamId] = action`.
+                // My new `updateSimWithOverride` in app.js sets `USER_ARROWS[sortedId] = winnerId`.
+                // Then `runSimulation` collects `USER_ARROWS`?
+                // I need to check `app.js` `runSimulation`.
+
+                // Ah, in `app.js` `runSimulation` (Line 58 in viewed code):
+                // `const overrides = {}; Object.values(USER_ARROWS).forEach(winnerId => { overrides[winnerId] = 'win'; });`
+                // OLD LOGIC WAS WRONG for the new Bracket System.
+                // I need to update `app.js` `runSimulation` to pass the raw `USER_ARROWS` (or equivalent) to backend.
+
+                // If I fix `app.js` to send `{ "KC-BUF": "12" }`, then here in `run` I get `key="KC-BUF"`, `value="12"`.
+                playoffOverrides[key] = action; // 'action' here is the winner ID
+                continue;
+            }
+
+            // Regular Season (Team ID based)
+            const teamId = key;
             const gId = teamNextGameId[teamId];
             if (gId) {
                 const game = this.games.find(g => g.id === gId);
@@ -109,13 +142,18 @@ export class Simulator {
 
                 const result = this.simulateMatchup(homeT, awayT);
                 this.updateStandings(runTeams, game.homeId, game.awayId, result);
+
+                // Track Game Stats
+                if (!gameStats[game.id]) gameStats[game.id] = { homeWins: 0, total: 0 };
+                gameStats[game.id].total++;
+                if (result === 'home') gameStats[game.id].homeWins++;
             }
 
             // 3. Determine Playoff Seeds
             const { afcSeeds, nfcSeeds } = this.processPlayoffSeeds(runTeams, results);
 
             // 4. Simulate Playoffs (New)
-            this.simulatePlayoffs(afcSeeds, nfcSeeds, results);
+            this.simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, playoffOverrides);
         }
 
         // Set totalSims
@@ -126,189 +164,151 @@ export class Simulator {
         const end = performance.now();
         console.log(`Simulation x${this.ITERATIONS} took ${(end - start).toFixed(2)} ms`);
 
-        return results;
+        return { teams: results, games: gameStats, matchups: matchupStats };
     }
 
-    simulateMatchup(homeT, awayT) {
-        // Dynamic Rating-Based Probability using Live Stats
-        const getLiveRating = (t) => {
-            if (!t.stats || t.stats.gamesPlayed === 0) return 0;
-            return (t.stats.pointsFor - t.stats.pointsAgainst) / t.stats.gamesPlayed;
-        };
+    updateStandings(teams, homeId, awayId, result) {
+        const h = teams[homeId];
+        const a = teams[awayId];
 
-        const rHome = getLiveRating(homeT);
-        const rAway = getLiveRating(awayT);
-        const spread = rHome - rAway + HOME_ADVANTAGE;
-        const probHome = 1 / (1 + Math.pow(10, -(spread / 16)));
+        if (result === 'home') {
+            h.record.wins++;
+            a.record.losses++;
+        } else if (result === 'away') {
+            a.record.wins++;
+            h.record.losses++;
+        } else {
+            h.record.ties++;
+            a.record.ties++;
+        }
 
-        if (isNaN(probHome)) return 'tie'; // Fallback
+        const sameDiv = h.division === a.division && h.conference === a.conference;
+        const sameConf = h.conference === a.conference;
 
-        const r = Math.random();
-        const tieProb = 0.003; // Regular season tie prob
+        if (sameDiv) {
+            if (result === 'home') { h.divRecord.wins++; a.divRecord.losses++; }
+            else if (result === 'away') { a.divRecord.wins++; h.divRecord.losses++; }
+            else { h.divRecord.ties++; a.divRecord.ties++; }
+        }
 
-        if (r < probHome - (tieProb / 2)) return 'home';
-        else if (r > probHome + (tieProb / 2)) return 'away';
-        else return 'tie';
+        if (sameConf) {
+            if (result === 'home') { h.confRecord.wins++; a.confRecord.losses++; }
+            else if (result === 'away') { a.confRecord.wins++; h.confRecord.losses++; }
+            else { h.confRecord.ties++; a.confRecord.ties++; }
+        }
     }
 
     getWinPct(team) {
         const total = team.record.wins + team.record.losses + team.record.ties;
-        if (total === 0) return 0.5;
-        return (team.record.wins + (team.record.ties * 0.5)) / total;
+        if (total === 0) return 0;
+        return (team.record.wins + 0.5 * team.record.ties) / total;
     }
 
-    updateStandings(teams, homeId, awayId, result) {
-        teams[homeId].stats.gamesPlayed++;
-        teams[awayId].stats.gamesPlayed++;
+    simulateMatchup(home, away) {
+        const getRat = (t) => {
+            if (t.stats.gamesPlayed === 0) return 0;
+            return (t.stats.pointsFor - t.stats.pointsAgainst) / t.stats.gamesPlayed;
+        };
+        const rh = getRat(home);
+        const ra = getRat(away);
 
-        if (result === 'home') {
-            teams[homeId].record.wins++;
-            teams[awayId].record.losses++;
-            if (teams[homeId].division === teams[awayId].division) {
-                teams[homeId].divRecord.wins++;
-                teams[awayId].divRecord.losses++;
-            }
-        } else if (result === 'away') {
-            teams[awayId].record.wins++;
-            teams[homeId].record.losses++;
-            if (teams[homeId].division === teams[awayId].division) {
-                teams[awayId].divRecord.wins++;
-                teams[homeId].divRecord.losses++;
-            }
-        } else {
-            teams[homeId].record.ties++;
-            teams[awayId].record.ties++;
-            if (teams[homeId].division === teams[awayId].division) {
-                teams[homeId].divRecord.ties++;
-                teams[awayId].divRecord.ties++;
-            }
-        }
+        const spread = rh - ra + 2.0; // +2.0 Home Advantage
+        const prob = 1 / (1 + Math.pow(10, -(spread / 16)));
+
+        return Math.random() < prob ? 'home' : 'away';
     }
 
-    processPlayoffSeeds(teams, results) {
-        const afc = [];
-        const nfc = [];
+    simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, playoffOverrides = {}) {
+        if (afcSeeds.length < 7 || nfcSeeds.length < 7) return;
 
-        Object.values(teams).forEach(t => {
-            if (t.conference === 'AFC') afc.push(t);
-            else if (t.conference === 'NFC') nfc.push(t);
-        });
+        // TRACK MADE DIV (Byes)
+        results[afcSeeds[0].id].madeDivisional++;
+        results[nfcSeeds[0].id].madeDivisional++;
 
-        const afcSeeds = this.rankConference(afc, results, null);
-        const nfcSeeds = this.rankConference(nfc, results, null);
-        return { afcSeeds, nfcSeeds };
-    }
+        // Helper to record matchup
+        const track = (round, t1, t2) => {
+            if (!matchupStats[round]) matchupStats[round] = {};
+            // Sorted key so KC-BUF is same as BUF-KC
+            const key = [t1.abbr, t2.abbr].sort().join('-');
+            if (!matchupStats[round][key]) matchupStats[round][key] = { count: 0, p1: t1, p2: t2 };
+            matchupStats[round][key].count++;
+        };
 
-    rankConference(confTeams, results, runH2H) {
-        const divisions = {};
-        confTeams.forEach(t => {
-            if (!divisions[t.division]) divisions[t.division] = [];
-            divisions[t.division].push(t);
-        });
+        const play = (t1, t2, round) => {
+            track(round, t1, t2);
 
-        const divWinners = [];
-        const wildCards = [];
-
-        for (const divName in divisions) {
-            const dTeams = divisions[divName];
-            dTeams.sort((a, b) => this.getWinPct(b) - this.getWinPct(a));
-            const ranked = this.resolveTies(dTeams, runH2H, 'division');
-            divWinners.push(ranked[0]);
-            results[ranked[0].id].wonDivision++;
-            for (let i = 1; i < ranked.length; i++) wildCards.push(ranked[i]);
-        }
-
-        const rankedWinners = this.resolveTies(divWinners, runH2H, 'conference');
-        rankedWinners.forEach((t, idx) => {
-            if (t) this.recordSeed(results, t.id, idx + 1);
-        });
-
-        const rankedWildCards = this.iterativeWildCardSort(wildCards);
-        for (let i = 0; i < 3; i++) {
-            if (rankedWildCards[i]) {
-                this.recordSeed(results, rankedWildCards[i].id, 4 + 1 + i);
+            // CHECK OVERRIDES
+            const key = [t1.abbr, t2.abbr].sort().join('-');
+            if (playoffOverrides[key]) {
+                return String(playoffOverrides[key]) === String(t1.id) ? t1 : t2;
             }
-        }
 
-        // Return ordered seeds 1-7 (filter nulls)
-        const seeds = [];
-        for (let i = 0; i < 4; i++) if (rankedWinners[i]) seeds.push(rankedWinners[i]);
-        for (let i = 0; i < 3; i++) if (rankedWildCards[i]) seeds.push(rankedWildCards[i]);
-        return seeds;
-    }
-
-    simulatePlayoffs(afcSeeds, nfcSeeds, results) {
-        if (afcSeeds.length < 7 || nfcSeeds.length < 7) return; // Not enough teams?
-
-        // Helper for independent game
-        const play = (t1, t2) => {
-            // Force a winner (no ties in playoffs)
-            // Using existing rating logic but ignore ties
-            // Or simpler: higher seed favored? 
-            // Let's use the rate-based simulateMatchup but force binary
-            // Home field advantage for higher seed (better seed = lower index)
-            // t1 is usually better seed in this logic? We will pass (Home, Away)
             let winner = this.simulateMatchup(t1, t2);
             while (winner === 'tie') winner = Math.random() < 0.5 ? 'home' : 'away';
             return winner === 'home' ? t1 : t2;
         };
 
-        const runConf = (seeds) => {
-            // Wild Card Round
-            // 2 vs 7, 3 vs 6, 4 vs 5
-            const w2v7 = play(seeds[1], seeds[6]); // Seed 2 (index 1) vs Seed 7 (index 6)
-            const w3v6 = play(seeds[2], seeds[5]);
-            const w4v5 = play(seeds[3], seeds[4]);
+        const runConf = (seeds, confName) => {
+            // Wild Card (Round 1)
+            // Seeds indices: 0=1st, 1=2nd... 6=7th
+            const w2v7 = play(seeds[1], seeds[6], 'WC');
+            const w3v6 = play(seeds[2], seeds[5], 'WC');
+            const w4v5 = play(seeds[3], seeds[4], 'WC');
 
-            // Divisional Round
-            // 1 seed plays lowest remaining seed
-            // We have 1, plus 3 winners.
+            // Winners make Div
+            results[w2v7.id].madeDivisional++;
+            results[w3v6.id].madeDivisional++;
+            results[w4v5.id].madeDivisional++;
+
+            // Divisional (Round 2)
             const living = [seeds[0], w2v7, w3v6, w4v5];
-            // Sort by original seed index to find lowest?
-            // Actually, we can just look at their original seed property if we stored it, or index in `seeds` array.
-            // Let's rely on the fact that `seeds` is sorted 1-7. 
-            // We need to map back to seed index.
             const getSeedIdx = (t) => seeds.findIndex(s => s.id === t.id);
+            living.sort((a, b) => getSeedIdx(a) - getSeedIdx(b)); // Lowest index = Highest seed
 
-            // Sort living by seed index (Ascending = Better seed)
-            living.sort((a, b) => getSeedIdx(a) - getSeedIdx(b));
+            const div1 = play(living[0], living[3], 'DIV'); // 1 vs Lowest
+            const div2 = play(living[1], living[2], 'DIV'); // 2nd Best vs 3rd Best
 
-            // Divisional Matchups
-            // 1st (Best, Seed 1) vs 4th (Worst)
-            // 2nd vs 3rd
-            const div1 = play(living[0], living[3]);
-            const div2 = play(living[1], living[2]);
+            // Winners make Conf
+            results[div1.id].madeConference++;
+            results[div2.id].madeConference++;
 
-            // Conference Championship
-            // Higher seed hosts (lower index in `seeds` list)
+            // Conference (Round 3)
             const c1 = div1;
             const c2 = div2;
-            // Determine host
             const idx1 = getSeedIdx(c1);
             const idx2 = getSeedIdx(c2);
+            // Higher seed hosts
+            const confWinner = idx1 < idx2 ? play(c1, c2, 'CONF') : play(c2, c1, 'CONF');
 
-            const confWinner = idx1 < idx2 ? play(c1, c2) : play(c2, c1);
+            // Winner makes SB
+            results[confWinner.id].madeSuperBowl++;
+
             return confWinner;
         };
 
-        const afcChamp = runConf(afcSeeds);
-        const nfcChamp = runConf(nfcSeeds);
+        const afcWinner = runConf(afcSeeds, 'AFC');
+        const nfcWinner = runConf(nfcSeeds, 'NFC');
 
-        // Super Bowl (Neutral Site - Neutralize Home Field?)
-        // For simplicity, we just run it. Maybe give small Home Advantage to better record?
-        // Or just pure rating. 
-        // Let's use play(afc, nfc) but potentially negate HOME_ADVANTAGE inside simulateMatchup?
-        // simulateMatchup uses `HOME_ADVANTAGE` constant.
-        // We can just accept it or effectively randomize who is "Home".
-        // Let's randomize "Home" assignment for SB.
-
-        // Wait, simulateMatchup uses `HOME_ADVANTAGE` global.
-        // Let's just run it. Random home team for SB.
-        let sbWinner;
-        if (Math.random() < 0.5) sbWinner = play(afcChamp, nfcChamp);
-        else sbWinner = play(nfcChamp, afcChamp);
-
+        // Super Bowl (Round 4)
+        const sbWinner = play(afcWinner, nfcWinner, 'SB');
         results[sbWinner.id].wonSuperBowl++;
+    }
+
+
+
+    processPlayoffSeeds(teamsMap, results) {
+        const teamList = Object.values(teamsMap);
+        const afc = teamList.filter(t => t.conference === 'AFC');
+        const nfc = teamList.filter(t => t.conference === 'NFC');
+
+        const afcSeeds = this.getConferenceSeeds(afc);
+        const nfcSeeds = this.getConferenceSeeds(nfc);
+
+        // Record seed counts for results
+        afcSeeds.forEach((t, idx) => this.recordSeed(results, t.id, idx + 1));
+        nfcSeeds.forEach((t, idx) => this.recordSeed(results, t.id, idx + 1));
+
+        return { afcSeeds, nfcSeeds };
     }
 
     getConferenceSeeds(confTeams) {

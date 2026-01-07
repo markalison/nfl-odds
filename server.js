@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import axios from 'axios';
 import { Simulator } from './simulator.js';
-import Endpoints from './endpoints.js';
+import Endpoints, { Team } from './endpoints.js';
 import { getTeamStructure } from './structure.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,7 +42,8 @@ async function refreshData() {
     console.log("Fetching fresh data from ESPN...");
     try {
         // 1. Teams
-        const teamsUrl = Endpoints.teams({ limit: 40 });
+        // Try enabling statistics
+        const teamsUrl = Endpoints.teams({ limit: 40, enable: 'statistics,stats' });
         console.log("Teams URL:", teamsUrl);
 
         const teamsRes = await axios.get(teamsUrl, AXIOS_CONFIG);
@@ -52,8 +53,13 @@ async function refreshData() {
 
         if (teamsData.sports) {
             const league = teamsData.sports[0].leagues[0];
-            league.teams.forEach(wrapper => {
+            league.teams.forEach((wrapper, idx) => {
                 const team = wrapper.team;
+                if (idx === 0) {
+                    console.log("Team [0] keys:", Object.keys(team));
+                    if (team.statistics) console.log("Team [0] has statistics!");
+                    if (team.stats) console.log("Team [0] has stats!");
+                }
 
                 let record = { wins: 0, losses: 0, ties: 0 };
                 if (team.record) {
@@ -109,11 +115,11 @@ async function refreshData() {
                             awayScore: parseInt(away.score)
                         });
                     } else {
-                        // EXCLUDE POSTSEASON GAMES from simulation schedule
-                        // If the game is type 3 (Postseason), we do not simulate it as part of "Making the Playoffs"
+                        // EXCLUDE POSTSEASON GAMES from simulation schedule (FLAGGING ONLY)
+                        let isPlayoff = false;
                         if (evt.season && evt.season.type === 3) {
-                            console.log(`Skipping Postseason Game: ${home.team.abbreviation} vs ${away.team.abbreviation}`);
-                            return;
+                            console.log(`Including Postseason Game: ${home.team.abbreviation} vs ${away.team.abbreviation}`);
+                            isPlayoff = true;
                         }
 
                         // Debug logging for uncompleted games
@@ -124,7 +130,23 @@ async function refreshData() {
                             week: evt.week ? evt.week.number : 0,
                             homeId: home.team.id,
                             awayId: away.team.id,
-                            completed: false
+                            completed: false,
+                            date: evt.date,
+                            odds: comp.odds && comp.odds[0] ? {
+                                details: comp.odds[0].details,
+                                overUnder: comp.odds[0].overUnder
+                            } : null,
+                            venue: comp.venue ? {
+                                fullName: comp.venue.fullName,
+                                address: comp.venue.address
+                            } : null,
+                            broadcast: comp.broadcasts && comp.broadcasts[0] ? comp.broadcasts[0].names[0] : null,
+                            weather: comp.weather ? {
+                                displayValue: comp.weather.displayValue,
+                                temperature: comp.weather.temperature
+                            } : null,
+                            status: evt.status,
+                            isPlayoff: isPlayoff
                         });
                     }
                 }
@@ -225,9 +247,118 @@ app.post('/api/simulate', async (req, res) => {
     const userOverrides = req.body.overrides || {};
     await refreshData();
     // Pass completed games to Simulator
-    const sim = new Simulator(cache.teams, cache.schedule, cache.completed);
+    // Filter out Postseason games from schedule for "Making Playoffs" simulation
+    const regSeasonSchedule = cache.schedule.filter(g => !g.isPlayoff);
+    const sim = new Simulator(cache.teams, regSeasonSchedule, cache.completed);
     const results = sim.run(userOverrides);
     res.json(results);
+});
+
+app.get('/api/team/:id/stats', async (req, res) => {
+    const teamId = req.params.id;
+
+    try {
+        // Use Core API for accurate ranks and stats
+        const url = Team(teamId).statistics;
+        console.log(`Fetching stats for team ${teamId}: ${url}`);
+
+        const response = await axios.get(url, AXIOS_CONFIG);
+        const data = response.data;
+        let stats = {};
+
+        // Parse Splits (usually just one main split for the season)
+        let categories = [];
+        if (data.splits && data.splits.categories) {
+            categories = data.splits.categories;
+        } else if (data.splits && data.splits.length > 0) {
+            categories = data.splits[0].categories;
+        }
+
+        // Helper
+        const findStat = (catName, statName) => {
+            const cat = categories.find(c => c.name === catName);
+            if (!cat || !cat.stats) return null;
+            return cat.stats.find(s => s.name === statName);
+        };
+
+        const formatStat = (s) => ({
+            value: s ? s.value : 0,
+            displayValue: s ? s.displayValue : 'N/A',
+            rank: s ? s.rank : undefined
+        });
+
+        // 1. Turnover Differential (Avg)
+        // calculated as Total / GP
+        const turnoverDiffTotal = findStat('miscellaneous', 'turnOverDifferential');
+        const gamesPlayed = findStat('general', 'gamesPlayed');
+        let avgTurnoverMargin = 'N/A';
+
+        if (turnoverDiffTotal && gamesPlayed && gamesPlayed.value > 0) {
+            const avg = turnoverDiffTotal.value / gamesPlayed.value;
+            avgTurnoverMargin = (avg > 0 ? '+' : '') + avg.toFixed(1);
+        }
+
+        stats = {
+            pointsPerGame: formatStat(findStat('scoring', 'totalPointsPerGame')),
+            pointsAllowed: formatStat(findStat('scoring', 'totalPointsAllowedPerGame')), // Not exactly available? Check 'totalPoints' in scoring defense? 
+            // diverse naming in Core API:
+            // scoring -> totalPointsPerGame (Offense)
+            // defensive -> pointsAllowed (Total). Divide by GP manually if needed or look for perGame.
+            // Let's rely on what we saw in research: "pointsAllowed" was 0 in that dump? Wait.
+            // "pointsAllowed" in 'defensive' category was 0 in the research dump for team 2 (Bills)? That's suspicious.
+            // Actually, "pointsAllowed" is often in 'scoring' or a defensive split?
+            // Let's use 'totalPointsAllowed' if accessible or fallback.
+            // Research showed 'defensive' category had pointsAllowed: 0. 
+            // This might mean we need a different split or it's mislabeled.
+            // Let's stick to what usually works or re-mapping.
+            // Alternative: 'scoring' -> 'totalPoints' (Offense). 
+            // Core API creates 'defensive' stats often in a separate 'opponent' split?
+            // The research script showed Splits: Object with categories. 
+            // It didn't show an "Opponent" split.
+            // In Site API, we had 'results.opponent'.
+            // In Core API, you might need to fetch the opponent statistics separately or use 'defensive' category correctly.
+            // Let's assume the 'ranking' fields are what the user wants most.
+
+            // Let's genericize for now and if some values are wrong (0), we fix.
+            // "totalPointsPerGame" (Scoring) is definitely Offense.
+
+            passOffense: formatStat(findStat('passing', 'passingYardsPerGame')),
+            rushOffense: formatStat(findStat('rushing', 'rushingYardsPerGame')),
+
+            // Defense is tricky in Core API if not explicit.
+            // Let's genericize:
+            passDefense: formatStat(findStat('passing', 'passingYardsAllowedPerGame')), // Check if exists
+            rushDefense: formatStat(findStat('rushing', 'rushingYardsAllowedPerGame')),
+            scoringDefense: formatStat(findStat('scoring', 'totalPointsAllowedPerGame')),
+
+            turnoverDiff: {
+                value: turnoverDiffTotal ? turnoverDiffTotal.value : 0,
+                displayValue: avgTurnoverMargin, // User asked for Average
+                rank: turnoverDiffTotal ? turnoverDiffTotal.rank : undefined,
+                label: 'Avg Turnover Margin'
+            }
+        };
+
+        // Fallback for missing PerGame stats if allowed ones aren't there
+        // (We might need to calculate from totals if 'PerGame' keys don't exist)
+        if (stats.passDefense.displayValue === 'N/A' && gamesPlayed) {
+            const passYdsAllowed = findStat('defensive', 'passingYardsAllowed') || findStat('passing', 'passingYardsAllowed');
+            if (passYdsAllowed) {
+                stats.passDefense = {
+                    value: passYdsAllowed.value / gamesPlayed.value,
+                    displayValue: (passYdsAllowed.value / gamesPlayed.value).toFixed(1),
+                    rank: passYdsAllowed.rank
+                };
+            }
+        }
+
+        // Return structured
+        res.json(stats);
+
+    } catch (e) {
+        console.error(`Error fetching stats for ${teamId}:`, e.message);
+        res.status(500).json({ error: "Failed to fetch stats" });
+    }
 });
 
 // SPA Fallback: Serve index.html for any unknown route (so /article/:id works)

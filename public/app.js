@@ -12,7 +12,6 @@ let USER_OVERRIDES = {}; // { teamId: 'win'|'loss'|'tie' }
 document.addEventListener('DOMContentLoaded', async () => {
     await fetchData();
     renderView(CURRENT_VIEW);
-    renderAsideStories();
 });
 
 async function fetchData() {
@@ -38,28 +37,63 @@ async function fetchData() {
     }
 }
 
-async function runSimulation(overrides) {
-    showLoading(true);
+async function runSimulation() {
+    console.log("Running Simulation...");
+    const btn = document.getElementById('btn-sim');
+    if (btn) btn.disabled = true;
+    if (btn) btn.textContent = 'Simulating...';
+
+    // Build overrides from USER_ARROWS (map gameId -> string outcome?)
+    // Actually server expects { [teamId]: 'win'/'loss' } or { [gameId]: 'home'/'away' }?
+    // Simulator.js `run` expects { [teamId]: 'win' ... }.
+    // We need to map gameId winner to teamId status.
+    // Actually, simulator.js logic around lines 71+ handles specific game IDs if we pass them correctly?
+    // Looking at simulator.js:
+    // It maps teamId -> nextGameId. 
+    // It iterates `userOverrides` keys. If key is teamId, it checks next game.
+    // So we should format overrides as { [WinnerTeamId]: 'win' }. 
+    // If we pick a winner, that team 'wins'. The loser 'loses' implicitly.
+
+    // Build overrides
+    // 1. Regular Season (Team-based): { [teamId]: 'win'|'loss' }
+    // 2. Playoff (Matchup-based): { [ABBR-ABBR]: winnerId }
+
+    const overrides = { ...USER_OVERRIDES };
+
+    // Add Bracket Picks
+    Object.keys(USER_ARROWS).forEach(matchupKey => {
+        overrides[matchupKey] = USER_ARROWS[matchupKey];
+    });
+    console.log("Overrides sent to simulation:", overrides);
+
     try {
         const res = await fetch('/api/simulate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ overrides })
         });
-        const results = await res.json();
-        // Merge results into teams
-        Object.keys(results).forEach(tid => {
-            if (GLOBAL_DATA.teams[tid]) {
-                GLOBAL_DATA.teams[tid].simData = results[tid];
-            }
-        });
-        renderView(CURRENT_VIEW);
-        renderTicker();
-        renderAsideStories();
+        const data = await res.json();
+
+        // Data format: { teams: {...}, games: {...}, matchups: {...} }
+        GLOBAL_DATA.simResults = data.teams;
+        if (data.games) GLOBAL_DATA.gameStats = data.games;
+        GLOBAL_DATA.matchups = data.matchups; // Store dynamic matchups
+
+        // Update Teams with Sim Data (Crucial for Bracket Advancement)
+        if (GLOBAL_DATA.teams && GLOBAL_DATA.simResults) {
+            Object.values(GLOBAL_DATA.teams).forEach(t => {
+                t.simData = GLOBAL_DATA.simResults[t.id];
+            });
+        }
+
+        renderMainTable();
+        // renderScoreboard(); // Ticker removed
+        renderInteractiveBracket(); // Update bracket view if visible
     } catch (e) {
-        console.error("Sim Error:", e);
+        console.error("Simulation failed:", e);
     } finally {
-        showLoading(false);
+        if (btn) btn.disabled = false;
+        if (btn) btn.textContent = 'Run Simulation';
     }
 }
 
@@ -82,147 +116,15 @@ window.renderView = function (viewType) {
     container.innerHTML = '';
 
     if (viewType === 'playoffs') {
-        renderBracket(container);
-    } else if (viewType === 'article') {
-        // Param passed as global or argument?
-        // renderView definition needs update to accept param
-        // But ticker calls renderView('article', 'id')
-        // arguments[1] works or update signature
-        renderArticle(arguments[1]);
+        container.innerHTML = '<div id="bracket-container"></div>';
+        renderInteractiveBracket();
     } else {
         renderTable(container, viewType);
     }
 }
 
 
-const STORIES = [
-    {
-        id: 'coaching-carousel-2026',
-        title: 'Coaching Carousel: Fans React to Major Shakeups',
-        date: 'January 5, 2026',
-        category: 'League News',
-        image: '/coaching_carousel.jpg',
-        summary: `
-                <p>The NFL coaching landscape shifted dramatically today. We analyzed fan sentiment across Reddit threads to gauge the reaction to the dismissals of Morris, Gannon, Stefanski, and Carroll.</p>
-                <div style="margin-bottom: 8px; border-left: 3px solid #e53e3e; padding-left: 8px;">
-                    <b>Falcons:</b> 95% Approval (Relieved)
-                </div>
-                <div style="margin-bottom: 8px; border-left: 3px solid #b91c1c; padding-left: 8px;">
-                    <b>Cardinals:</b> 85% Approval (Happy)
-                </div>
-                <div style="margin-bottom: 8px; border-left: 3px solid #cbd5e0; padding-left: 8px;">
-                    <b>Raiders:</b> 50% Approval (Respectful)
-                </div>
-            `,
-        fullContent: `
-                <div class="article-container">
-                    <img src="/coaching_carousel.jpg" style="width:100%; height:auto; border-radius:8px; margin-bottom:20px;">
-                    <h1>Coaching Carousel: Fans React to Major Shakeups</h1>
-                    <div class="article-meta">By Jerhyn Sports • January 5, 2026</div>
-                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                    
-                    <p>The Monday following Week 18 is always a brutal day in the National Football League, but 2026's "Black Monday" has been particularly volatile. With four major organizations deciding to press the reset button, the league landscape has shifted overnight. We took to the team subreddits to gauge the true "Fan Sentiment" for each move.</p>
-                    
-                    <h3>Atlanta Falcons: Raheem Morris Out</h3>
-                    <p><b>Fan Sentiment Score: 95% Approval (Relieved/Happy)</b></p>
-                    <p>The reaction from Atlanta has been almost universally positive. After another season of defensive collapses, the fanbase had reached a breaking point. The top comment on the <a href="https://www.reddit.com/r/falcons" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Falcons megathread</a> simply read: <i>"EVERYONE GET IN HERE!!!!!"</i>. Fans are hopeful for an offensive-minded reset.</p>
-
-                    <h3>Arizona Cardinals: Jonathan Gannon Departs</h3>
-                    <p><b>Fan Sentiment Score: 85% Approval (Relieved)</b></p>
-                    <p>Jonathan Gannon's tenure in the desert ends after a disastrous 9-game losing streak. Cardinals fans on <a href="https://www.reddit.com/r/AZCardinals" target="_blank" style="color: #2563eb; text-decoration: underline;">r/AZCardinals</a> feel vindicated, calling the team's regression "unforgivable." The focus now turns to salvaging Kyler Murray's prime.</p>
-
-                    <h3>Las Vegas Raiders: The Pete Carroll Experiment Ends</h3>
-                    <p><b>Fan Sentiment Score: 65% Approval (Respectful/Ready)</b></p>
-                    <p>The Pete Carroll era in Las Vegas is officially over. While the legendary coach brought a culture shift, the on-field results (6-11) just weren't enough. On <a href="https://www.reddit.com/r/raiders" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Raiders</a>, the sentiment is respectful but firm: "Love Pete, but we need a long-term answer." The image of him in the Silver & Black will remain iconic, but brief.</p>
-
-                    <h3>Cleveland Browns: Stefanski Fired</h3>
-                    <p><b>Fan Sentiment Score: 40% Approval (Angry at Ownership)</b></p>
-                    <p>The vitriol in <a href="https://www.reddit.com/r/Browns" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Browns</a> is palpable, but it's aimed at ownership. While Stefanski was let go, fans see this as another symptom of the Jimmy Haslam era's instability. "It doesn't matter who coaches if the owner is the problem," serves as the rallying cry for a frustrated fanbase.</p>
-                </div>
-            `
-    },
-    {
-        id: 'steelers-ravens-week-18',
-        title: 'AFC North Champions: Steelers Outlast Ravens 26-24',
-        date: 'January 4, 2026',
-        category: 'Division Clincher',
-        image: '/terrible_towel.png',
-        summary: `
-                <p>The <b>Pittsburgh Steelers</b> are AFC North Champions! A 26-yard TD pass from Aaron Rodgers to Calvin Austin sealed the 26-24 win.</p>
-                <p>Drama peaked when Chris Boswell missed the extra point, but Baltimore's last-second 44-yard attempt went wide right.</p>
-            `,
-        fullContent: `
-                <div class="article-container">
-                    <img src="/terrible_towel.png" style="width:100%; height:300px; object-fit:cover; border-radius:8px; margin-bottom:20px; object-position: center;">
-                    <h1>AFC North Champions: Steelers Outlast Ravens</h1>
-                    <div class="article-meta">January 4, 2026</div>
-                    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
-                    
-                    <p>In a game that will be instantly enshrined in the lore of this bitter rivalry, the <b>Pittsburgh Steelers</b> defeated the <b>Baltimore Ravens</b> 26-24 to capture the 2025 AFC North division title and the conference's No. 4 seed. See the reaction on <a href="https://www.reddit.com/r/steelers" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Steelers</a>.</p>
-                    
-                    <h3>Rodgers to Austin: The Dagger</h3>
-                    <p>With just 1:04 remaining on the clock, <b>Aaron Rodgers</b> fired a strike to <b>Calvin Austin III</b> to put Pittsburgh ahead.</p>
-
-                    <h3>The Missed Point & The Missed Chance</h3>
-                    <p><b>Chris Boswell</b> missed the extra point, giving Baltimore a chance. But rookie kicker Tyler Loop's 44-yard attempt sailed broad right, sealing the <a href="https://www.reddit.com/r/ravens" target="_blank" style="color: #2563eb; text-decoration: underline;">r/Ravens</a> fate.</p>
-                </div>
-            `
-    }
-];
-
-function renderAsideStories() {
-    const container = document.getElementById('stories-viewport');
-    if (!container) return;
-
-    container.innerHTML = STORIES.map(s => `
-        <div class="story-card" id="${s.id}">
-             ${s.image ? `<div onclick="renderArticle('${s.id}')" class="story-link-wrapper"><img src="${s.image}" class="story-image-header"></div>` : ''}
-            <div class="story-header">
-                <div onclick="renderArticle('${s.id}')" class="story-title-link" style="cursor:pointer;"><h2>${s.title}</h2></div>
-                <div class="story-meta">${s.category} | ${s.date}</div>
-            </div>
-            <div class="story-content">
-                ${s.summary}
-            </div>
-             <div class="story-footer">
-                <div onclick="renderArticle('${s.id}')" class="story-read-more" style="cursor:pointer;">Read Full Story &rarr;</div>
-            </div>
-        </div>
-    `).join('');
-}
-
-window.renderArticle = function (id) {
-    const story = STORIES.find(s => s.id === id);
-    if (!story) return;
-
-    // Update URL logic (SPA Routing)
-    // Only push state if we aren't already there (avoids duplicate history entries)
-    const currentPath = window.location.pathname;
-    if (currentPath !== `/article/${id}`) {
-        history.pushState({ view: 'article', id: id }, '', `/article/${id}`);
-    }
-
-    const container = document.getElementById('view-container');
-    document.querySelectorAll('.table-tab-btn').forEach(btn => btn.classList.remove('active'));
-
-    container.innerHTML = `
-            <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto;">
-                <button onclick="goBackFromArticle()" style="margin-bottom: 20px; cursor: pointer; border: none; background: none; color: #718096; font-weight: 600;">&larr; Back to Odds</button>
-                ${story.fullContent}
-            </div>
-        `;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-};
-
-window.goBackFromArticle = function () {
-    // Go back in history if possible, else default to league view
-    if (history.state && history.state.view === 'article') {
-        history.back();
-    } else {
-        history.pushState(null, '', '/');
-        renderView('league');
-    }
-}
+// Story removal: Article rendering and back functions removed
 
 // Handle Browser Back Button
 window.addEventListener('popstate', (event) => {
@@ -230,31 +132,13 @@ window.addEventListener('popstate', (event) => {
 });
 
 function handleRouting() {
-    const path = window.location.pathname;
-    if (path.startsWith('/article/')) {
-        const id = path.split('/')[2];
-        // Render article without pushing state
-        const story = STORIES.find(s => s.id === id);
-        if (story) {
-            const container = document.getElementById('view-container');
-            document.querySelectorAll('.table-tab-btn').forEach(btn => btn.classList.remove('active'));
-            container.innerHTML = `
-                    <div style="background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 800px; margin: 0 auto;">
-                        <button onclick="goBackFromArticle()" style="margin-bottom: 20px; cursor: pointer; border: none; background: none; color: #718096; font-weight: 600;">&larr; Back to Odds</button>
-                        ${story.fullContent}
-                    </div>
-                `;
-        }
-    } else {
-        renderView('league');
-    }
+    renderView('league');
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
     await fetchData();
     // Initial Route Check
     handleRouting();
-    renderAsideStories();
 });
 
 function renderTable(container, filter) {
@@ -268,10 +152,10 @@ function renderTable(container, filter) {
             <th class="col-team" onclick="changeSort('team')">Team ${getSortArrow('team')}</th>
             <th class="col-record" onclick="changeSort('record')">Record ${getSortArrow('record')}</th>
             <th class="col-confdiv">Conf/Div</th>
-            <th class="col-playoff" onclick="changeSort('playoff')">Playoffs ${getSortArrow('playoff')}</th>
-            <th class="col-division" onclick="changeSort('div')">Win Div ${getSortArrow('div')}</th>
-            <th class="col-seed1" onclick="changeSort('seed1')">Bye ${getSortArrow('seed1')}</th>
-            <th class="col-sb" onclick="changeSort('sb')">Super Bowl ${getSortArrow('sb')}</th>
+            <th class="col-playoff" onclick="changeSort('playoff')">Wild Card ${getSortArrow('playoff')}</th>
+            <th class="col-division" onclick="changeSort('div')">Divisional ${getSortArrow('div')}</th>
+            <th class="col-seed1" onclick="changeSort('conf')">Conf Champ ${getSortArrow('conf')}</th>
+            <th class="col-sb" onclick="changeSort('sb')">SB ${getSortArrow('sb')}</th>
         </tr>
     `;
     table.appendChild(thead);
@@ -282,7 +166,6 @@ function renderTable(container, filter) {
     const sortedTeams = getSortedTeams(Object.values(GLOBAL_DATA.teams), filter);
 
     // Pre-calculate Next Game Map
-    // We only care if a team has an *unplayed* game (completed: false)
     const nextGameMap = {};
     GLOBAL_DATA.schedule.forEach(g => {
         if (!g.completed) {
@@ -294,7 +177,7 @@ function renderTable(container, filter) {
     let lastGroup = null;
 
     sortedTeams.forEach(team => {
-        // Dividers
+        // Dividers ...
         if (filter === 'conf' && team.conference !== lastGroup) {
             lastGroup = team.conference;
             const r = document.createElement('tr'); r.className = 'group-divider'; r.innerHTML = '<td colspan="8"></td>'; tbody.appendChild(r);
@@ -306,15 +189,21 @@ function renderTable(container, filter) {
 
         const tr = document.createElement('tr');
 
-        const sim = team.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
+        // Defaults
+        const sim = team.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
         const total = sim.totalSims || 1;
 
-        const pPlayoff = (sim.madePlayoffs / total * 100).toFixed(1);
-        const pDiv = (sim.wonDivision / total * 100).toFixed(1);
-        const pSeed1 = (sim.seed1 / total * 100).toFixed(1);
+        // Map Cols
+        // WC = Reach Playoffs
+        const pWC = (sim.madePlayoffs / total * 100).toFixed(1);
+        // Div = Reach Div
+        const pDiv = (sim.madeDivisional / total * 100).toFixed(1);
+        // Conf = Reach Conf
+        const pConf = (sim.madeConference / total * 100).toFixed(1);
+        // SB = Win SB (standard assumption for last col)
         const pSB = (sim.wonSuperBowl / total * 100).toFixed(1);
 
-        // Colors
+        // Colors ...
         const cellColor = (val) => {
             const v = parseFloat(val);
             if (v >= 99.9) return `background-color: #2c5282; color: white;`;
@@ -333,9 +222,9 @@ function renderTable(container, filter) {
             <td class="record-cell">${team.record.wins}-${team.record.losses}-${team.record.ties}</td>
              <td class="record-cell" style="text-align: center; color: #555;">${team.conference}<br><span style="font-size:10px">${team.division}</span></td>
             
-            <td class="heatmap-cell" style="${cellColor(pPlayoff)}">${pPlayoff}%</td>
+            <td class="heatmap-cell" style="${cellColor(pWC)}">${pWC}%</td>
             <td class="heatmap-cell" style="${cellColor(pDiv)}">${pDiv}%</td>
-            <td class="heatmap-cell" style="${cellColor(pSeed1)}">${pSeed1}%</td>
+            <td class="heatmap-cell" style="${cellColor(pConf)}">${pConf}%</td>
             <td class="heatmap-cell" style="${cellColor(pSB)}">${pSB}%</td>
         `;
 
@@ -346,177 +235,31 @@ function renderTable(container, filter) {
     container.appendChild(table);
 }
 
-function renderBracket(container) {
-    // Basic Bracket Rendering Logic (Simplified for verified seeds 1-7)
-    // We need to determine the seeds first.
-    // Use Sim Data averages or just Sort by Seed Probability?
-    // Python version likely showed *Current Standings* seeds.
-    // Let's use getSortedTeams with 'seed' logic on the fly or just sort by current record/tiebreaks
-    // Logic: Sort AFC and NFC teams by "Projected Seed" (simulated or record).
-    // Let's use sim-based probability for "Projected Bracket" ??
-    // User expects "Playoff Bracket" -> usually Current Picture.
-    // Let's use GLOBAL_DATA.teams sorted by `simData.seed1`... or just use the sort logic.
-
-    // Sort logic from 'sim' sort:
-    // Sort logic from 'sim' sort:
-    const afcTeams = Object.values(GLOBAL_DATA.teams).filter(t => t.conference === 'AFC');
-    const nfcTeams = Object.values(GLOBAL_DATA.teams).filter(t => t.conference === 'NFC');
-
-    // Use Server-Provided Seeds (1-7)
-    // The server calculates seeds using the robust tiebreaker engine.
-
-    const getSeed = (list, seedNum) => list.find(t => t.seed === seedNum) || { name: 'TBD', abbr: 'TBD', logo: '', seed: seedNum };
-
-    const afc1 = getSeed(afcTeams, 1);
-    const afc2 = getSeed(afcTeams, 2);
-    const afc3 = getSeed(afcTeams, 3);
-    const afc4 = getSeed(afcTeams, 4);
-    const afc5 = getSeed(afcTeams, 5);
-    const afc6 = getSeed(afcTeams, 6);
-    const afc7 = getSeed(afcTeams, 7);
-
-    const nfc1 = getSeed(nfcTeams, 1);
-    const nfc2 = getSeed(nfcTeams, 2);
-    const nfc3 = getSeed(nfcTeams, 3);
-    const nfc4 = getSeed(nfcTeams, 4);
-    const nfc5 = getSeed(nfcTeams, 5);
-    const nfc6 = getSeed(nfcTeams, 6);
-    const nfc7 = getSeed(nfcTeams, 7);
-
-    const matchBox = (t1, t2, side) => `
-        <div class="matchup-pair">
-            <div class="team-box ${t1.abbr === 'TBD' ? 'tbd' : ''}">
-                <div class="team-logo"><img src="${t1.logo}" onerror="this.style.display='none'"></div>
-                <div class="team-info">
-                    <div class="team-name">(${t1.seed || '-'}) ${t1.abbr}</div>
-                </div>
-            </div>
-            <div class="team-box ${t2.abbr === 'TBD' ? 'tbd' : ''}">
-                <div class="team-logo"><img src="${t2.logo}" onerror="this.style.display='none'"></div>
-                <div class="team-info">
-                    <div class="team-name">(${t2.seed || '-'}) ${t2.abbr}</div>
-                </div>
-            </div>
-            <div class="matchup-wire-logo">
-                <img src="${t1.logo}" class="wire-logo-img">
-            </div>
-        </div>
-    `;
-
-    // HTML Structure based on bracket.css (Vertical Layout)
-    container.innerHTML = `
-    <div class="bracket-container">
-        <div class="bracket-wrapper">
-            <!-- AFC Side -->
-            <div class="conf-column afc-col">
-                <div class="afc-title">AFC</div>
-                
-                <!-- Wild Card Round -->
-                <div class="round-col">
-                    <div style="text-align:center; font-weight:700; color:#cbd5e0; margin-bottom:10px;">WILD CARD</div>
-                    <div class="matchup-row">
-                         <!-- 2 vs 7 -->
-                         ${matchBox(afc2, afc7, 'afc')}
-                         <!-- 3 vs 6 -->
-                         ${matchBox(afc3, afc6, 'afc')}
-                         <!-- 4 vs 5 -->
-                         ${matchBox(afc4, afc5, 'afc')}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Super Bowl Center -->
-            <div class="sb-center">
-                <div class="sb-logo-text">SUPER<br>BOWL</div>
-                <div class="sb-roman">LIX</div>
-                
-                <div style="margin-top:40px; text-align:center;">
-                    <div style="font-size:12px; color:#a0aec0; margin-bottom:5px;">BYE WEEK</div>
-                    <div class="team-box seed-1-box" style="margin-bottom:10px;"><img src="${afc1.logo}" alt="">${afc1.abbr}</div>
-                    <div class="team-box seed-1-box"><img src="${nfc1.logo}" alt="">${nfc1.abbr}</div>
-                </div>
-            </div>
-
-            <!-- NFC Side -->
-            <div class="conf-column nfc-col">
-                <div class="nfc-title">NFC</div>
-                 <div class="round-col">
-                    <div style="text-align:center; font-weight:700; color:#cbd5e0; margin-bottom:10px;">WILD CARD</div>
-                    <div class="matchup-row">
-                         <!-- 2 vs 7 -->
-                         ${matchBox(nfc2, nfc7, 'nfc')}
-                         <!-- 3 vs 6 -->
-                         ${matchBox(nfc3, nfc6, 'nfc')}
-                         <!-- 4 vs 5 -->
-                         ${matchBox(nfc4, nfc5, 'nfc')}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    `;
-}
-
-function getWinPct(team) {
-    const total = team.record.wins + team.record.losses + team.record.ties;
-    if (total === 0) return 0.5;
-    return (team.record.wins + 0.5 * team.record.ties) / total;
-}
-
-window.userAction = function (teamId, action) {
-    // Send override and re-sim
-    // Toggle logic: if clicking same action, clear it
-    if (USER_OVERRIDES[teamId] === action) {
-        delete USER_OVERRIDES[teamId];
-        action = 'none'; // Tell server to clear
-    } else {
-        USER_OVERRIDES[teamId] = action;
-    }
-
-    const overrides = { ...USER_OVERRIDES };
-    runSimulation(overrides);
-}
+// ...
 
 function getSortedTeams(teams, filter) {
-    // 1. Filter/Group logic first?
-    // Actually, sorting usually overrides grouping unless we are in Group View.
-    // In 'conf' view, we MUST group by Conf first.
-
+    // ...
     return teams.sort((a, b) => {
-        // Grouping overrides
-        if (filter === 'conf') {
-            if (a.conference < b.conference) return -1;
-            if (a.conference > b.conference) return 1;
-        }
-        if (filter === 'div') {
-            if (a.division < b.division) return -1;
-            if (a.division > b.division) return 1;
-        }
+        // ...
 
         // Feature Sort
         let valA, valB;
-        const simA = a.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
-        const simB = b.simData || { madePlayoffs: 0, wonDivision: 0, seed1: 0, wonSuperBowl: 0 };
+        const simA = a.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
+        const simB = b.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
         const totalA = simA.totalSims || 1;
         const totalB = simB.totalSims || 1;
 
         switch (CURRENT_SORT.field) {
-            case 'team':
-                valA = a.name; valB = b.name;
-                if (valA < valB) return CURRENT_SORT.dir === 'asc' ? -1 : 1;
-                if (valA > valB) return CURRENT_SORT.dir === 'asc' ? 1 : -1;
-                return 0;
-            case 'record':
-                valA = getWinPct(a); valB = getWinPct(b);
-                break;
+            case 'team': // ...
+            // ...
             case 'playoff':
                 valA = simA.madePlayoffs / totalA; valB = simB.madePlayoffs / totalB;
                 break;
             case 'div':
-                valA = simA.wonDivision / totalA; valB = simB.wonDivision / totalB;
+                valA = simA.madeDivisional / totalA; valB = simB.madeDivisional / totalB;
                 break;
-            case 'seed1':
-                valA = simA.seed1 / totalA; valB = simB.seed1 / totalB;
+            case 'conf': // seed1 -> conf
+                valA = simA.madeConference / totalA; valB = simB.madeConference / totalB;
                 break;
             case 'sb':
                 valA = simA.wonSuperBowl / totalA; valB = simB.wonSuperBowl / totalB;
@@ -560,110 +303,356 @@ function isSel(tid, act) {
     return USER_OVERRIDES[tid] === act ? `active ${act}` : '';
 }
 
-function renderTicker() {
-    const container = document.getElementById('ticker-container');
-    if (!container) return;
+// Interactive Bracket State
+let USER_ARROWS = {}; // Store user picks: { gameId: winnerId }
 
-    let clinched = [];
-    let eliminated = [];
+async function previewMatchup(homeId, awayId) {
+    const modal = document.getElementById('preview-modal');
+    const content = document.getElementById('preview-content');
 
-    Object.values(GLOBAL_DATA.teams).forEach(t => {
-        const sim = t.simData || {};
-        const total = sim.totalSims || 1;
-        const pPlayoff = (sim.madePlayoffs / total * 100);
+    content.innerHTML = '<div class="text-center p-4">Loading stats...</div>';
+    modal.style.display = 'flex';
 
-        if (pPlayoff >= 99.9) clinched.push(t);
-        if (pPlayoff <= 0.1) eliminated.push(t);
-    });
+    try {
+        const [homeStats, awayStats] = await Promise.all([
+            fetch(`/api/team/${homeId}/stats`).then(r => r.json()),
+            fetch(`/api/team/${awayId}/stats`).then(r => r.json())
+        ]);
 
-    const createTickerContent = () => {
-        let itemsHtml = '';
+        const hTeam = GLOBAL_DATA.teams[homeId];
+        const aTeam = GLOBAL_DATA.teams[awayId];
 
-        // Helper to find team by seed and conf
-        const getSeed = (teams, conf, seedNum) =>
-            teams.find(t => t.conference === conf && (t.seed === seedNum || t.simData?.seed1 && seedNum === 1));
-
-        const teamsArr = Object.values(GLOBAL_DATA.teams);
-
-        // AFC Matchups
-        const afc1 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 1);
-        const afc2 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 2);
-        const afc3 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 3);
-        const afc4 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 4);
-        const afc5 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 5);
-        const afc6 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 6);
-        const afc7 = teamsArr.find(t => t.conference === 'AFC' && t.seed === 7);
-
-        // NFC Matchups
-        const nfc1 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 1);
-        const nfc2 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 2);
-        const nfc3 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 3);
-        const nfc4 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 4);
-        const nfc5 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 5);
-        const nfc6 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 6);
-        const nfc7 = teamsArr.find(t => t.conference === 'NFC' && t.seed === 7);
-
-        const renderMatchup = (t1, t2) => {
-            if (!t1 || !t2) return '';
-            return `
-                <div class="ticker-item matchup-item" style="border-right: 1px solid #4a5568; padding-right: 20px;">
-                    <div class="ticker-team">
-                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">${t1.seed}</span>
-                        <img src="${t1.logo}" class="ticker-logo" onerror="this.style.display='none'">
-                        <span class="ticker-abbr">${t1.abbr}</span>
-                    </div>
-                    <span style="font-size:12px; font-weight:700; color:#e2e8f0; margin:0 8px;">VS</span>
-                    <div class="ticker-team" style="margin-right:0;">
-                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">${t2.seed}</span>
-                        <img src="${t2.logo}" class="ticker-logo" onerror="this.style.display='none'">
-                        <span class="ticker-abbr">${t2.abbr}</span>
-                    </div>
-                </div>
-            `;
+        const formatVal = (stat) => {
+            if (!stat) return 'N/A';
+            // stat is { value, displayValue, rank }
+            let s = stat.displayValue || 'N/A';
+            if (stat.rank) s += ` (#${stat.rank})`;
+            return s;
         };
 
-        const renderBye = (t) => {
-            if (!t) return '';
+        const getRaw = (stat) => stat ? parseFloat(stat.value) : -1;
+
+        const row = (label, hStat, aStat, lowerBetter = false) => {
+            const hVal = formatVal(hStat);
+            const aVal = formatVal(aStat);
+            const hRaw = getRaw(hStat);
+            const aRaw = getRaw(aStat);
+
+            let hBetter = false, aBetter = false;
+            if (hRaw !== -1 && aRaw !== -1) {
+                if (lowerBetter) {
+                    if (hRaw < aRaw) hBetter = true;
+                    else if (aRaw < hRaw) aBetter = true;
+                } else {
+                    if (hRaw > aRaw) hBetter = true;
+                    else if (aRaw > hRaw) aBetter = true;
+                }
+            }
+
             return `
-                <div class="ticker-item matchup-item" style="border-right: 1px solid #4a5568; padding-right: 20px;">
-                     <div class="ticker-team">
-                        <span style="font-size:10px; color:#a0aec0; margin-right:4px;">1</span>
-                        <img src="${t.logo}" class="ticker-logo" onerror="this.style.display='none'">
-                        <span class="ticker-abbr">${t.abbr}</span>
-                    </div>
-                    <span class="ticker-label ticker-clinched" style="margin-left:8px;">BYE WEEK</span>
+            <div class="stat-row">
+                <div class="stat-val ${aBetter ? 'better' : ''}">${aVal}</div>
+                <div class="stat-label">${label}</div>
+                <div class="stat-val ${hBetter ? 'better' : ''}">${hVal}</div>
+            </div>
+            `;
+        }
+
+
+        const prob = getMatchupWinProb(hTeam, aTeam);
+        const fav = prob > 50 ? hTeam : aTeam;
+        const pct = prob > 50 ? prob : 100 - prob;
+
+        const narrative = `
+            <div class="preview-narrative" style="padding: 15px; background: #f7fafc; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5; color: #2d3748;">
+                <p style="margin: 0;">
+                    Based on <strong>1000 simulations</strong>, the <strong>${fav.name}</strong> are favored to win with a <strong>${pct}%</strong> probability.
+                    ${fav.name}'s offense (Points: ${formatVal(fav.id === hTeam.id ? homeStats.pointsPerGame : awayStats.pointsPerGame)}) 
+                    is projected to outpace ${fav.id === hTeam.id ? aTeam.name : hTeam.name}.
+                </p>
+            </div>
+        `;
+
+        content.innerHTML = `
+            <div class="preview-header">
+                <div class="team-col">
+                    <img src="${aTeam.logo}" class="team-logo-lg">
+                    <h3>${aTeam.name}</h3>
+                </div>
+                <div class="vs-col">VS</div>
+                <div class="team-col">
+                    <img src="${hTeam.logo}" class="team-logo-lg">
+                    <h3>${hTeam.name}</h3>
+                </div>
+            </div>
+            ${narrative}
+            <div class="stats-grid">
+                ${row('Points / Game', homeStats.pointsPerGame, awayStats.pointsPerGame)}
+                ${row('Points Allowed', homeStats.scoringDefense, awayStats.scoringDefense, true)}
+                ${row('Pass Offense', homeStats.passOffense, awayStats.passOffense)}
+                ${row('Pass Defense', homeStats.passDefense, awayStats.passDefense, true)}
+                ${row('Rush Offense', homeStats.rushOffense, awayStats.rushOffense)}
+                ${row('Rush Defense', homeStats.rushDefense, awayStats.rushDefense, true)}
+                ${row('Avg Turnover Margin', homeStats.turnoverDiff, awayStats.turnoverDiff)}
+            </div>
+            <div class="preview-footer">
+                <button onclick="document.getElementById('preview-modal').style.display='none'" class="close-btn">Close</button>
+            </div>
+        `;
+
+    } catch (e) {
+        content.innerHTML = `<div class="error">Error loading stats: ${e.message}</div>`;
+    }
+}
+
+async function updateSimWithOverride(gameId, winnerId) {
+    USER_ARROWS[gameId] = winnerId;
+    console.log("User picked:", winnerId, "for game", gameId);
+
+    // Re-run simulation
+    await runSimulation();
+    // runSimulation() handles updating the view, but we need to ensure it uses USER_ARROWS
+    // actually runSimulation calls fetch('/api/simulate', ...)
+    // we need to pass overrides there.
+}
+window.updateSimWithOverride = updateSimWithOverride;
+
+// Modify runSimulation to use overrides
+// (This needs to be updated in the existing runSimulation function)
+
+// Helper to calculate match odds (mirrors Simulator logic)
+function getMatchupWinProb(p1, p2) {
+    // Basic Rating
+    const getRat = (t) => {
+        const stats = t.stats || { pointsFor: 0, pointsAgainst: 0, gamesPlayed: 1 }; // Fallback
+        if (!stats.gamesPlayed) return 0;
+        return (stats.pointsFor - stats.pointsAgainst) / stats.gamesPlayed;
+    };
+    const r1 = getRat(p1);
+    const r2 = getRat(p2);
+    // Home Advantage not perfectly applicable in neutral site playoff? 
+    // Usually higher seed is home.
+    // We don't know who is home info in the 'matchup' object easily without seed check.
+    // Let's assume Seed logic: Lower seed = Home.
+    // If Seeds are 'TBD', assume neutral (0).
+    const s1 = parseInt(p1.seed) || 99;
+    const s2 = parseInt(p2.seed) || 99;
+    const ha = (s1 < s2) ? 2.0 : (s2 < s1) ? -2.0 : 0;
+
+    const spread = r1 - r2 + ha;
+    const prob1 = 1 / (1 + Math.pow(10, -(spread / 16)));
+    return (prob1 * 100).toFixed(0);
+}
+
+function renderInteractiveBracket() {
+    const container = document.getElementById('bracket-container');
+    if (!container) return;
+
+    if (!GLOBAL_DATA.matchups) {
+        container.innerHTML = '<div class="p-4 text-center text-white">Run Simulation to see Bracket</div>';
+        return;
+    }
+
+    const { WC } = GLOBAL_DATA.matchups;
+    const teams = Object.values(GLOBAL_DATA.teams);
+
+    // Simulation Data
+    const sampleTeam = GLOBAL_DATA.simResults ? Object.values(GLOBAL_DATA.simResults)[0] : null;
+    const totalSims = sampleTeam ? sampleTeam.totalSims : 1000;
+    const threshold = totalSims * 0.9;
+
+    // Helper: Sort matches by count (for WC)
+    const getSorted = (roundObj) => {
+        if (!roundObj) return [];
+        return Object.values(roundObj).sort((a, b) => b.count - a.count);
+    };
+
+    // --- Wild Card (Fixed 6) ---
+    // Use Matchup logic for WC as it's the starting point
+    const wcSorted = getSorted(WC).slice(0, 6);
+    const wcGames = [...wcSorted];
+    while (wcGames.length < 6) wcGames.push({ isTBD: true });
+
+    // --- Dynamic Progression Logic (Team Based) ---
+    const getRoundTeams = (conf, prop) => {
+        const res = teams.filter(t =>
+            t.conference === conf &&
+            (t.simData && t.simData[prop] >= threshold)
+        ).sort((a, b) => a.seed - b.seed);
+        console.log(`[Bracket Debug] ${conf} ${prop} (Thresh: ${threshold}):`, res.map(t => `${t.abbr} (${t.simData[prop]})`));
+        return res;
+    };
+
+    const buildDivGames = (conf) => {
+        const knowns = getRoundTeams(conf, 'madeDivisional');
+        // Logic: 
+        // Slot 1: Seed 1 (knowns[0]) vs Lowest Remaining.
+        // Slot 2: 2nd Highest vs 3rd Highest.
+        // If we don't have enough knowns, show TBD.
+
+        let slot1, slot2;
+
+        // Slot 1 (Top Seed vs Lowest)
+        // Ideally knowns[0] is Seed 1.
+        if (knowns.length > 0 && knowns[0].seed === 1) {
+            // Do we have the lowest seed? (Length == 4 implies we have all)
+            const p2 = (knowns.length === 4) ? knowns[3] : null; // 4th item is lowest seed
+            slot1 = { p1: knowns[0], p2: p2, isPartial: !p2 };
+        } else {
+            // If Seed 1 isn't even >90% (unlikely), TBD.
+            slot1 = { isTBD: true };
+        }
+
+        // Slot 2 (2nd vs 3rd)
+        // If we have at least 2 teams (Seed 1 + One other), who is the other?
+        // If we have 4 teams: Index 1 vs Index 2.
+        // If we have 2 or 3 teams: We have Index 1 (Highest non-1). But maybe not their opponent.
+        if (knowns.length >= 2) {
+            const p1 = knowns[1]; // 2nd Highest known
+            const p2 = (knowns.length === 4) ? knowns[2] : null; // 3rd known
+            slot1 = slot1.isTBD ? slot1 : slot1; // Keep slot1
+            slot2 = { p1: p1, p2: p2, isPartial: !p2 };
+        } else {
+            slot2 = { isTBD: true };
+        }
+
+        return [slot1, slot2];
+    };
+
+    const divGames = [...buildDivGames('AFC'), ...buildDivGames('NFC')];
+
+    // --- Conference ---
+    const buildConfGame = (conf) => {
+        const knowns = getRoundTeams(conf, 'madeConference');
+        // Need Top vs Bottom (Higher Seed vs Lower Seed)
+        // knowns sorted by seed (asc).
+        if (knowns.length >= 2) {
+            return { p1: knowns[0], p2: knowns[1] };
+        } else if (knowns.length === 1) {
+            return { p1: knowns[0], p2: null, isPartial: true };
+        }
+        return { isTBD: true };
+    };
+    const confGames = [buildConfGame('AFC'), buildConfGame('NFC')];
+
+    // --- Super Bowl ---
+    const afcChamps = getRoundTeams('AFC', 'madeSuperBowl'); // AFC Rep
+    const nfcChamps = getRoundTeams('NFC', 'madeSuperBowl'); // NFC Rep
+
+    let sbGameVal = { isTBD: true };
+    if (afcChamps.length > 0 && nfcChamps.length > 0) {
+        sbGameVal = { p1: afcChamps[0], p2: nfcChamps[0] };
+    } else if (afcChamps.length > 0) {
+        sbGameVal = { p1: afcChamps[0], p2: null, isPartial: true };
+    } else if (nfcChamps.length > 0) {
+        sbGameVal = { p1: nfcChamps[0], p2: null, isPartial: true }; // Place NFC in p1 for partial rendering support
+        // Wait, renderGame expects p1 vs p2. 
+        // If p1 is NFC, just render it "NFC Team vs TBD".
+    }
+    const sbGame = [sbGameVal];
+
+
+    const renderGame = (m, roundTitle) => {
+        if (m.isTBD) {
+            return `
+                <div class="bracket-node empty">
+                    <div class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">TBD vs TBD</div>
+                    <div class="text-xs text-gray-500">Wait for Results</div>
                 </div>
             `;
         }
 
-        // Build String
-        itemsHtml += renderBye(afc1);
-        itemsHtml += renderMatchup(afc2, afc7);
-        itemsHtml += renderMatchup(afc3, afc6);
-        itemsHtml += renderMatchup(afc4, afc5);
+        const p1 = m.p1;
+        const p2 = m.p2;
 
-        itemsHtml += renderBye(nfc1);
-        itemsHtml += renderMatchup(nfc2, nfc7);
-        itemsHtml += renderMatchup(nfc3, nfc6);
-        itemsHtml += renderMatchup(nfc4, nfc5);
+        // Calculate Probabilities if both exist
+        let p1Str = "0%", p2Str = "0%";
+        if (p1 && p2) {
+            const val = getMatchupWinProb(p1, p2);
+            p1Str = val + "%";
+            p2Str = (100 - val) + "%";
+        }
 
-        return itemsHtml;
+        const renderTeamNode = (team, isPicked, prob) => {
+            return `
+                <label class="node-team ${isPicked ? 'picked' : ''} cursor-pointer">
+                    <div class="flex items-center gap-2">
+                         <input type="radio" name="${m.sortedId || 'partial'}" 
+                                value="${team.id}" 
+                                ${isPicked ? 'checked' : ''}
+                                onclick="${m.sortedId ? `updateSimWithOverride('${m.sortedId}', '${team.id}')` : ''}">
+                         <img src="${team.logo}" class="node-logo"> 
+                         <div class="flex flex-col leading-tight">
+                            <div class="flex items-center gap-1">
+                                <span class="text-xs text-gray-400 font-mono">${team.seed || ''}</span>
+                                <span class="font-bold text-sm text-black" style="font-size: 13px;">${team.nickname || team.name}</span>
+                            </div>
+                         </div>
+                    </div>
+                    <span class="prob-text">${prob}</span>
+                </label>
+             `;
+        };
+
+        // Partial (Team vs TBD)
+        if (m.isPartial && p1) {
+            return `
+                <div class="bracket-node">
+                    ${renderTeamNode(p1, true, "ADV")}
+                    <div class="node-vs">vs</div>
+                    <div class="node-team opacity-50 border-dashed border border-gray-300 justify-center">
+                        <span class="text-xs font-bold text-gray-400">TBD</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Full Matchup
+        m.sortedId = [p1.abbr, p2.abbr].sort().join('-');
+
+        const pickedId = USER_ARROWS[m.sortedId];
+
+        return `
+            <div class="bracket-node">
+                ${renderTeamNode(p1, pickedId === p1.id, p1Str)}
+                <div class="node-vs">vs</div>
+                ${renderTeamNode(p2, pickedId === p2.id, p2Str)}
+                <button class="preview-btn-sm" onclick="previewMatchup('${p1.id}', '${p2.id}')">Preview</button>
+            </div>
+        `;
     };
 
-    const tickerContent = createTickerContent();
-
-    // Simple Marquee style - Double the content for seamless wrap
-    // Updated ticker to open article on click
-    let html = `
-    <div class="news-ticker" onclick="renderView('article', 'steelers-ravens-week-18')" style="cursor: pointer;">
-        <div class="ticker-title">THE WIRE</div>
-        <div class="ticker-wrap">
-            <div class="ticker-move">
-                ${tickerContent}
-                ${tickerContent}
+    const renderColumn = (title, games) => `
+        <div class="round-col">
+            <div class="round-header">${title}</div>
+            <div class="matchup-col-list">
+                ${games.length ? games.map(m => renderGame(m, title)).join('') : '<div class="spacer"></div>'}
             </div>
         </div>
-    </div>
-`;
-    container.innerHTML = html;
+    `;
+
+    container.innerHTML = `
+       <div class="bracket-wrapper-inter">
+           ${renderColumn('Wild Card', wcGames)}
+           ${renderColumn('Divisional', divGames)}
+           ${renderColumn('Conference', confGames)}
+           ${renderColumn('Super Bowl', sbGame)}
+       </div>
+   `;
 }
+
+// Restore missing functions
+function renderMainTable() {
+    // Only render table if NOT in playoffs view
+    if (CURRENT_VIEW === 'playoffs') return;
+
+    const container = document.getElementById('view-container');
+    if (container) renderTable(container, CURRENT_VIEW);
+}
+
+function renderScoreboard() {
+    const container = document.getElementById('ticker-container');
+    if (!container) return;
+    container.innerHTML = '';
+}
+
