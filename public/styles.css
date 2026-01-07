@@ -635,6 +635,12 @@ tbody td.record-cell {
     letter-spacing: 1px;
 }
 
+.antigravity-logo {
+    height: 24px;
+    width: auto;
+    object-fit: contain;
+}
+
 .brand-name {
     color: #4a5568;
     font-size: 15px;
