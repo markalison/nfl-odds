@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Only auto-refresh if no local picking activity is happening or if user is idle
         // But usually, refreshing data is safe as long as we don't clear overrides.
         await fetchData(true); // silent = true
-    }, 300000);
+    }, 120000); // 2 minutes
 });
 
 async function fetchData(silent = false) {

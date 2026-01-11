@@ -26,7 +26,7 @@ let cache = {
     lastFetch: 0
 };
 let simCache = new Map(); // Global cache for established projections
-const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 const AXIOS_CONFIG = {
     headers: {
@@ -381,6 +381,13 @@ app.listen(PORT, () => {
         const start = Date.now();
         refreshData().then(() => {
             console.log(`Data initialized in ${((Date.now() - start) / 1000).toFixed(2)}s`);
+
+            // Set up background refresh every 2 minutes to keep cache "hot"
+            setInterval(async () => {
+                console.log("Running background data refresh...");
+                await refreshData();
+            }, CACHE_DURATION);
+
         }).catch(err => {
             console.error("Startup cache warmup failed:", err);
         });
