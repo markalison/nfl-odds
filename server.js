@@ -95,7 +95,10 @@ async function refreshData() {
         const schData = schRes.data;
 
         const schedule = [];
-        const completedGames = [];
+        const completedRegSeason = [];
+        const completedPostSeason = [];
+        const clinchedTeamIds = new Set();
+        const playoffResults = {}; // { "ABBR1-ABBR2": winnerId }
 
         if (schData.events) {
             schData.events.forEach(evt => {
@@ -104,134 +107,114 @@ async function refreshData() {
                 const away = comp.competitors.find(c => c.homeAway === 'away');
 
                 if (home && away) {
-                    if (!teams[home.team.id] || !teams[away.team.id]) {
-                        return;
+                    if (!teams[home.team.id] || !teams[away.team.id]) return;
+
+                    const isPlayoff = evt.season && evt.season.type === 3;
+                    const gameObj = {
+                        id: evt.id,
+                        week: evt.week ? evt.week.number : 0,
+                        homeId: home.team.id,
+                        awayId: away.team.id,
+                        homeScore: parseInt(home.score) || 0,
+                        awayScore: parseInt(away.score) || 0,
+                        completed: evt.status.type.completed,
+                        date: evt.date,
+                        odds: comp.odds && comp.odds[0] ? {
+                            details: comp.odds[0].details,
+                            overUnder: comp.odds[0].overUnder
+                        } : null,
+                        venue: comp.venue ? {
+                            fullName: comp.venue.fullName,
+                            address: comp.venue.address
+                        } : null,
+                        broadcast: comp.broadcasts && comp.broadcasts[0] ? comp.broadcasts[0].names[0] : null,
+                        weather: comp.weather ? {
+                            displayValue: comp.weather.displayValue,
+                            temperature: comp.weather.temperature
+                        } : null,
+                        status: {
+                            ...evt.status,
+                            state: evt.status.type.state // 'pre', 'in', or 'post'
+                        },
+                        isPlayoff: isPlayoff
+                    };
+
+                    if (isPlayoff) {
+                        clinchedTeamIds.add(String(home.team.id));
+                        clinchedTeamIds.add(String(away.team.id));
                     }
 
                     if (evt.status.type.completed) {
-                        completedGames.push({
-                            homeId: home.team.id,
-                            awayId: away.team.id,
-                            homeScore: parseInt(home.score),
-                            awayScore: parseInt(away.score)
-                        });
-                    } else {
-                        // EXCLUDE POSTSEASON GAMES from simulation schedule (FLAGGING ONLY)
-                        let isPlayoff = false;
-                        if (evt.season && evt.season.type === 3) {
-                            console.log(`Including Postseason Game: ${home.team.abbreviation} vs ${away.team.abbreviation}`);
-                            isPlayoff = true;
+                        if (isPlayoff) {
+                            completedPostSeason.push(gameObj);
+                            const winner = parseInt(home.score) > parseInt(away.score) ? home.team.id : away.team.id;
+                            const key = [home.team.abbreviation, away.team.abbreviation].sort().join('-');
+                            playoffResults[key] = winner;
+                        } else {
+                            completedRegSeason.push(gameObj);
                         }
-
-                        // Debug logging for uncompleted games
-                        if (evt.status.type.detail) console.log(`Uncompleted Game: ${home.team.abbreviation} vs ${away.team.abbreviation} - Status: ${evt.status.type.detail}`);
-
-                        schedule.push({
-                            id: evt.id,
-                            week: evt.week ? evt.week.number : 0,
-                            homeId: home.team.id,
-                            awayId: away.team.id,
-                            completed: false,
-                            date: evt.date,
-                            odds: comp.odds && comp.odds[0] ? {
-                                details: comp.odds[0].details,
-                                overUnder: comp.odds[0].overUnder
-                            } : null,
-                            venue: comp.venue ? {
-                                fullName: comp.venue.fullName,
-                                address: comp.venue.address
-                            } : null,
-                            broadcast: comp.broadcasts && comp.broadcasts[0] ? comp.broadcasts[0].names[0] : null,
-                            weather: comp.weather ? {
-                                displayValue: comp.weather.displayValue,
-                                temperature: comp.weather.temperature
-                            } : null,
-                            status: evt.status,
-                            isPlayoff: isPlayoff
-                        });
+                    } else {
+                        schedule.push(gameObj);
                     }
                 }
             });
         }
 
-        // RECALCULATE RECORDS
-        // Implementation: Reset records to 0, then sum from completed games.
-        // We confirmed we have 271 completed games (Week 18 nearly done), so this is accurate.
-        // Trusting the 'teams' endpoint failed (records were 0-0-0), likely due to path schema mismatch.
-
+        // RESET RECORDS
         Object.values(teams).forEach(t => {
             t.record = { wins: 0, losses: 0, ties: 0 };
             t.stats = { pointsFor: 0, pointsAgainst: 0, gamesPlayed: 0 };
-            // Initialize Tiebreaker Records
             t.divRecord = { wins: 0, losses: 0, ties: 0 };
             t.confRecord = { wins: 0, losses: 0, ties: 0 };
         });
 
-        completedGames.forEach(g => {
-            if (teams[g.homeId] && teams[g.awayId]) {
-                const h = teams[g.homeId];
-                const a = teams[g.awayId];
+        // ONLY USE REGULAR SEASON FOR STANDINGS/RECORDS/STATS
+        completedRegSeason.forEach(g => {
+            const h = teams[g.homeId];
+            const a = teams[g.awayId];
+            if (!h || !a) return;
 
-                // Global Stats
-                h.stats.pointsFor += g.homeScore;
-                h.stats.pointsAgainst += g.awayScore;
-                h.stats.gamesPlayed++;
+            h.stats.pointsFor += g.homeScore;
+            h.stats.pointsAgainst += g.awayScore;
+            h.stats.gamesPlayed++;
+            a.stats.pointsFor += g.awayScore;
+            a.stats.pointsAgainst += g.homeScore;
+            a.stats.gamesPlayed++;
 
-                a.stats.pointsFor += g.awayScore;
-                a.stats.pointsAgainst += g.homeScore;
-                a.stats.gamesPlayed++;
-
-                let hWin = 0, aWin = 0, tie = 0;
-                if (g.homeScore > g.awayScore) hWin = 1;
-                else if (g.awayScore > g.homeScore) aWin = 1;
-                else tie = 1;
-
-                // Update Main Record
-                if (hWin) { h.record.wins++; a.record.losses++; }
-                else if (aWin) { a.record.wins++; h.record.losses++; }
-                else { h.record.ties++; a.record.ties++; }
-
-                // Update Division Record (if same division)
-                if (h.division === a.division && h.conference === a.conference) {
-                    if (hWin) { h.divRecord.wins++; a.divRecord.losses++; }
-                    else if (aWin) { a.divRecord.wins++; h.divRecord.losses++; }
-                    else { h.divRecord.ties++; a.divRecord.ties++; }
-                }
-
-                // Update Conference Record (if same conference)
-                if (h.conference === a.conference) {
-                    if (hWin) { h.confRecord.wins++; a.confRecord.losses++; }
-                    else if (aWin) { a.confRecord.wins++; h.confRecord.losses++; }
-                    else { h.confRecord.ties++; a.confRecord.ties++; }
-                }
+            if (g.homeScore > g.awayScore) {
+                h.record.wins++; a.record.losses++;
+                if (h.division === a.division && h.conference === a.conference) { h.divRecord.wins++; a.divRecord.losses++; }
+                if (h.conference === a.conference) { h.confRecord.wins++; a.confRecord.losses++; }
+            } else if (g.awayScore > g.homeScore) {
+                a.record.wins++; h.record.losses++;
+                if (h.division === a.division && h.conference === a.conference) { a.divRecord.wins++; h.divRecord.losses++; }
+                if (h.conference === a.conference) { a.confRecord.wins++; h.confRecord.losses++; }
+            } else {
+                h.record.ties++; a.record.ties++;
+                if (h.division === a.division && h.conference === a.conference) { h.divRecord.ties++; a.divRecord.ties++; }
+                if (h.conference === a.conference) { h.confRecord.ties++; a.confRecord.ties++; }
             }
         });
 
-        console.log("Recalculated records from", completedGames.length, "completed games.");
+        console.log(`Initialized with ${completedRegSeason.length} reg season and ${completedPostSeason.length} post season games.`);
+        console.log(`Clinched Teams: ${Array.from(clinchedTeamIds).map(id => teams[id]?.abbr).join(', ')}`);
 
-        // CALCULATE CURRENT SEEDS
-        // Use the Simulator logic to determine current 1-7 seeds based on verified tiebreakers
-        const sim = new Simulator(Object.values(teams), [], completedGames);
+        // CALCULATE CURRENT SEEDS (Reg Season Only)
+        // Pass regular season data to calculate what the seeds WOULD BE or ARE for bracket initialization
+        const seedSim = new Simulator(teams, [], completedRegSeason);
+        const afcSeeds = seedSim.getConferenceSeeds(Object.values(teams).filter(t => t.conference === 'AFC'));
+        const nfcSeeds = seedSim.getConferenceSeeds(Object.values(teams).filter(t => t.conference === 'NFC'));
 
-        const afcTeams = Object.values(teams).filter(t => t.conference === 'AFC');
-        const nfcTeams = Object.values(teams).filter(t => t.conference === 'NFC');
-
-        const afcSeeds = sim.getConferenceSeeds(afcTeams); // Returns [seed1, seed2, ... seed7]
-        const nfcSeeds = sim.getConferenceSeeds(nfcTeams);
-
-        // Assign seeds to teams object
-        afcSeeds.forEach((t, idx) => {
-            teams[t.id].seed = idx + 1;
-        });
-        nfcSeeds.forEach((t, idx) => {
-            teams[t.id].seed = idx + 1;
-        });
+        afcSeeds.forEach((t, idx) => { if (teams[t.id]) teams[t.id].seed = idx + 1; });
+        nfcSeeds.forEach((t, idx) => { if (teams[t.id]) teams[t.id].seed = idx + 1; });
 
         cache.teams = teams;
         cache.schedule = schedule;
-        cache.completed = completedGames; // Store completed games
+        cache.completed = [...completedRegSeason, ...completedPostSeason];
+        cache.clinchedTeamIds = Array.from(clinchedTeamIds);
+        cache.playoffResults = playoffResults;
         cache.lastFetch = now;
-        simCache.clear(); // Clear all established projections when data refreshes
+        simCache.clear();
 
     } catch (e) {
         console.error("Error fetching data:", e.message);
@@ -261,11 +244,16 @@ app.post('/api/simulate', async (req, res) => {
         return res.json(simCache.get(cacheKey));
     }
 
-    // Pass completed games to Simulator
-    const regSeasonSchedule = cache.schedule.filter(g => !g.isPlayoff);
-    const sim = new Simulator(cache.teams, regSeasonSchedule, cache.completed);
+    // Pass full schedule to Simulator to enable game-specific stat tracking
+    const sim = new Simulator(
+        cache.teams,
+        cache.schedule,
+        cache.completed,
+        cache.clinchedTeamIds,
+        cache.playoffResults
+    );
 
-    console.log("Generating NEW established projection (1000 sims)...");
+    console.log(`Generating NEW established projection (1000 sims) with ${cache.clinchedTeamIds.length} clinched teams...`);
     const results = sim.run(userOverrides);
 
     simCache.set(cacheKey, results);

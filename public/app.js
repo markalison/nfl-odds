@@ -12,37 +12,41 @@ let USER_ARROWS = JSON.parse(localStorage.getItem('nfl_arrows') || '{}');
 
 document.addEventListener('DOMContentLoaded', async () => {
     await fetchData();
+    await fetchData();
     renderView(CURRENT_VIEW);
+
+    // Auto-refresh data every 5 minutes
+    setInterval(async () => {
+        // Only auto-refresh if no local picking activity is happening or if user is idle
+        // But usually, refreshing data is safe as long as we don't clear overrides.
+        await fetchData(true); // silent = true
+    }, 300000);
 });
 
-async function fetchData() {
-    showLoading(true);
+async function fetchData(silent = false) {
+    if (!silent) showLoading(true);
     try {
         const res = await fetch('/api/data');
         const data = await res.json();
-        GLOBAL_DATA = data;
+        GLOBAL_DATA = { ...GLOBAL_DATA, ...data };
         console.log("Data loaded:", Object.keys(data.teams).length, "teams");
 
-        // Initial Simulation Run to get odds?
-        // Actually /api/data just returns static data.
-        // We probably want to trigger a sim immediately to get probabilities, 
-        // OR /api/data should return pre-simulated data if we cache it server side?
-        // The Python app ran sim on every request.
-        // Let's call /api/simulate with empty overrides to get initial odds.
-        await runSimulation({});
+        await runSimulation(silent);
 
     } catch (e) {
         console.error("Fetch Error:", e);
     } finally {
-        showLoading(false);
+        if (!silent) showLoading(false);
     }
 }
 
-async function runSimulation() {
+async function runSimulation(silent = false) {
     console.log("Running Simulation...");
     const btn = document.getElementById('btn-sim');
-    if (btn) btn.disabled = true;
-    if (btn) btn.textContent = 'Simulating...';
+    if (!silent && btn) {
+        btn.disabled = true;
+        btn.textContent = 'Simulating...';
+    }
 
     // Build overrides from USER_ARROWS (map gameId -> string outcome?)
     // Actually server expects { [teamId]: 'win'/'loss' } or { [gameId]: 'home'/'away' }?
@@ -90,7 +94,6 @@ async function runSimulation() {
         }
 
         renderMainTable();
-        // renderScoreboard(); // Ticker removed
         renderInteractiveBracket(); // Update bracket view if visible
     } catch (e) {
         console.error("Simulation failed:", e);
@@ -138,11 +141,19 @@ function handleRouting() {
     renderView('league');
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-    await fetchData();
-    // Initial Route Check
-    handleRouting();
-});
+
+function formatGroupTitle(title) {
+    const afcUrl = "https://a.espncdn.com/i/teamlogos/nfl/500/afc.png";
+    const nfcUrl = "https://a.espncdn.com/i/teamlogos/nfl/500/nfc.png";
+
+    if (title.startsWith("AFC")) {
+        return `<img src="${afcUrl}" class="conf-logo-inline"> ${title.replace("AFC", "").trim()}`;
+    }
+    if (title.startsWith("NFC")) {
+        return `<img src="${nfcUrl}" class="conf-logo-inline"> ${title.replace("NFC", "").trim()}`;
+    }
+    return title;
+}
 
 function renderTable(container, filter) {
     const table = document.createElement('table');
@@ -154,11 +165,27 @@ function renderTable(container, filter) {
         <tr>
             <th class="col-team" onclick="changeSort('team')">Team ${getSortArrow('team')}</th>
             <th class="col-record" onclick="changeSort('record')">Record ${getSortArrow('record')}</th>
-            <th class="col-confdiv">Conf/Div</th>
-            <th class="col-playoff" onclick="changeSort('playoff')">Wild Card ${getSortArrow('playoff')}</th>
-            <th class="col-division" onclick="changeSort('div')">Divisional ${getSortArrow('div')}</th>
-            <th class="col-seed1" onclick="changeSort('conf')">Conf Champ ${getSortArrow('conf')}</th>
-            <th class="col-sb" onclick="changeSort('sb')">SB ${getSortArrow('sb')}</th>
+            <th class="col-confdiv" style="text-align: center;">Conf/Div</th>
+            <th class="col-playoff" onclick="changeSort('playoff')">
+                <span class="full-name">Playoffs</span><span class="abbr-name">PO</span>
+                ${getSortArrow('playoff')}
+            </th>
+            <th class="col-division" onclick="changeSort('div')">
+                <span class="full-name">Divisional</span><span class="abbr-name">DIV</span>
+                ${getSortArrow('div')}
+            </th>
+            <th class="col-seed1" onclick="changeSort('conf')">
+                <span class="full-name">Conference</span><span class="abbr-name">CONF</span>
+                ${getSortArrow('conf')}
+            </th>
+            <th class="col-sb-app" onclick="changeSort('sb_app')">
+                <span class="full-name">Super Bowl</span><span class="abbr-name">SB</span>
+                ${getSortArrow('sb_app')}
+            </th>
+            <th class="col-sb-win" onclick="changeSort('sb')">
+                <span class="full-name">Champ</span><span class="abbr-name">CHAMP</span>
+                ${getSortArrow('sb')}
+            </th>
         </tr>
     `;
     table.appendChild(thead);
@@ -177,34 +204,19 @@ function renderTable(container, filter) {
         }
     });
 
-    let lastGroup = null;
-
     sortedTeams.forEach(team => {
-        // Dividers ...
-        if (filter === 'conf' && team.conference !== lastGroup) {
-            lastGroup = team.conference;
-            const r = document.createElement('tr'); r.className = 'group-divider'; r.innerHTML = '<td colspan="8"></td>'; tbody.appendChild(r);
-        }
-        if (filter === 'div' && team.division !== lastGroup) {
-            lastGroup = team.division;
-            const r = document.createElement('tr'); r.className = 'group-divider'; r.innerHTML = '<td colspan="8"></td>'; tbody.appendChild(r);
-        }
-
         const tr = document.createElement('tr');
 
         // Defaults
-        const sim = team.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
+        const sim = team.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, madeSuperBowl: 0, wonSuperBowl: 0 };
         const total = sim.totalSims || 1;
 
         // Map Cols
-        // WC = Reach Playoffs
         const pWC = (sim.madePlayoffs / total * 100).toFixed(1);
-        // Div = Reach Div
         const pDiv = (sim.madeDivisional / total * 100).toFixed(1);
-        // Conf = Reach Conf
         const pConf = (sim.madeConference / total * 100).toFixed(1);
-        // SB = Win SB (standard assumption for last col)
-        const pSB = (sim.wonSuperBowl / total * 100).toFixed(1);
+        const pSBApp = (sim.madeSuperBowl / total * 100).toFixed(1);
+        const pSBWin = (sim.wonSuperBowl / total * 100).toFixed(1);
 
         // Colors ...
         const cellColor = (val) => {
@@ -216,53 +228,83 @@ function renderTable(container, filter) {
         };
 
         tr.innerHTML = `
-            <td class="team-cell">
-                <div style="display: flex; align-items: center; gap: 10px;">
+            <td class="team-cell col-team">
+                <div class="team-info">
                     <img src="${team.logo}" class="team-logo" alt="">
-                    <span>${team.name}</span>
+                    <span class="team-name full-name">${team.name}</span>
+                    <span class="team-name abbr-name">${team.abbr}</span>
                 </div>
             </td>
-            <td class="record-cell">${team.record.wins}-${team.record.losses}-${team.record.ties}</td>
-             <td class="record-cell" style="text-align: center; color: #555;">${team.conference}<br><span style="font-size:10px">${team.division}</span></td>
+            <td class="col-record">${team.record.wins}-${team.record.losses}-${team.record.ties}</td>
+            <td class="col-confdiv" style="text-align: center;">
+                <div class="conf-badge-inline">
+                    <img src="${team.conference === 'AFC' ? 'https://a.espncdn.com/i/teamlogos/nfl/500/afc.png' : 'https://a.espncdn.com/i/teamlogos/nfl/500/nfc.png'}" class="conf-icon-sm">
+                    <span class="conf-name full-name">${team.conference} ${team.division.replace('AFC ', '').replace('NFC ', '')}</span>
+                    <span class="conf-name abbr-name">${team.conference.charAt(0)}${team.division.replace('AFC ', '').replace('NFC ', '').charAt(0)}</span>
+                </div>
+            </td>
             
-            <td class="heatmap-cell" style="${cellColor(pWC)}">${pWC}%</td>
-            <td class="heatmap-cell" style="${cellColor(pDiv)}">${pDiv}%</td>
-            <td class="heatmap-cell" style="${cellColor(pConf)}">${pConf}%</td>
-            <td class="heatmap-cell" style="${cellColor(pSB)}">${pSB}%</td>
+            <td class="heatmap-cell col-playoff" style="${cellColor(pWC)}">${pWC}%</td>
+            <td class="heatmap-cell col-division" style="${cellColor(pDiv)}">${pDiv}%</td>
+            <td class="heatmap-cell col-seed1" style="${cellColor(pConf)}">${pConf}%</td>
+            <td class="heatmap-cell col-sb-app" style="${cellColor(pSBApp)}">${pSBApp}%</td>
+            <td class="heatmap-cell col-sb-win" style="${cellColor(pSBWin)}">${pSBWin}%</td>
         `;
 
         tbody.appendChild(tr);
     });
 
     table.appendChild(tbody);
-    container.appendChild(table);
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-container';
+    wrapper.appendChild(table);
+    container.appendChild(wrapper);
 }
 
 // ...
 
 function getSortedTeams(teams, filter) {
-    // ...
-    return teams.sort((a, b) => {
-        // ...
+    const getWinPct = (t) => {
+        const tot = t.record.wins + t.record.losses + t.record.ties;
+        return tot === 0 ? 0 : (t.record.wins + 0.5 * t.record.ties) / tot;
+    };
 
-        // Feature Sort
+    return [...teams].sort((a, b) => {
+        // 1. Grouping Sort (Highest Priority)
+        if (filter === 'conf') {
+            if (a.conference !== b.conference) return a.conference.localeCompare(b.conference);
+        } else if (filter === 'div') {
+            if (a.division !== b.division) return a.division.localeCompare(b.division);
+        }
+
+        // 2. User/Feature Sort
         let valA, valB;
         const simA = a.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
         const simB = b.simData || { madePlayoffs: 0, madeDivisional: 0, madeConference: 0, wonSuperBowl: 0 };
         const totalA = simA.totalSims || 1;
         const totalB = simB.totalSims || 1;
 
+        if (CURRENT_SORT.field === 'team') {
+            valA = a.name; valB = b.name;
+            return CURRENT_SORT.dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+
         switch (CURRENT_SORT.field) {
-            case 'team': // ...
-            // ...
+            case 'record':
+                valA = getWinPct(a); valB = getWinPct(b);
+                break;
             case 'playoff':
                 valA = simA.madePlayoffs / totalA; valB = simB.madePlayoffs / totalB;
                 break;
             case 'div':
                 valA = simA.madeDivisional / totalA; valB = simB.madeDivisional / totalB;
                 break;
-            case 'conf': // seed1 -> conf
+            case 'conf':
                 valA = simA.madeConference / totalA; valB = simB.madeConference / totalB;
+                break;
+            case 'sb_app':
+                valA = simA.madeSuperBowl / totalA; valB = simB.madeSuperBowl / totalB;
                 break;
             case 'sb':
                 valA = simA.wonSuperBowl / totalA; valB = simB.wonSuperBowl / totalB;
@@ -272,18 +314,11 @@ function getSortedTeams(teams, filter) {
         }
 
         if (Math.abs(valA - valB) > 0.0001) {
-            if (valA < valB) return CURRENT_SORT.dir === 'asc' ? -1 : 1;
-            if (valA > valB) return CURRENT_SORT.dir === 'asc' ? 1 : -1;
+            return CURRENT_SORT.dir === 'asc' ? valA - valB : valB - valA;
         }
 
-        // Tiebreaker: Sort by Record Wins Descending (for non-playoff / 0% teams)
-        const winsA = a.record.wins + 0.5 * a.record.ties;
-        const winsB = b.record.wins + 0.5 * b.record.ties;
-        return winsB - winsA;
-
-        if (valA < valB) return CURRENT_SORT.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return CURRENT_SORT.dir === 'asc' ? 1 : -1;
-        return 0;
+        // 3. Fallback Tiebreaker
+        return b.record.wins - a.record.wins;
     });
 }
 

@@ -1,17 +1,13 @@
-
-const HOME_ADVANTAGE = 2.0;
-
 export class Simulator {
-    constructor(teams, games, completedGames = []) {
+    constructor(teams, games, completedGames = [], clinchedTeamIds = [], completedPlayoffGames = {}) {
         // Teams: { [id]: { record: {w,l,t}, conference, division, ... } }
         // Games: [ { homeId, awayId, completed: false, ... } ]
         this.teams = teams;
         this.games = games;
         this.completedGames = completedGames;
-        this.teams = teams;
-        this.games = games;
-        this.completedGames = completedGames;
-        this.ITERATIONS = 1000; // Increased for target accuracy and stability
+        this.clinchedTeamIds = clinchedTeamIds;
+        this.completedPlayoffGames = completedPlayoffGames; // { "ABBR1-ABBR2": winnerId }
+        this.ITERATIONS = 1000;
 
         this.h2hMatrix = this.buildH2HMatrix();
     }
@@ -38,9 +34,10 @@ export class Simulator {
 
         // Initialize results buckets
         Object.keys(this.teams).forEach(id => {
+            const isClinched = this.clinchedTeamIds.includes(id);
             results[id] = {
                 id: id,
-                madePlayoffs: 0, // === Reached WC Round
+                madePlayoffs: isClinched ? this.ITERATIONS : 0, // === Reached WC Round
                 wonDivision: 0,
                 seed1: 0,
                 seed2: 0,
@@ -79,28 +76,20 @@ export class Simulator {
         for (const [key, action] of Object.entries(userOverrides)) {
             if (action === 'none') continue;
 
-            // Check if key is a Playoff Matchup Key (e.g. "BUF-KC")
-            // IDs are usually numeric strings. Matchups are "ABBR-ABBR".
-            // Or "sortedId" from frontend.
-            if (key.includes('-')) {
-                // It's a playoff override. Value is "WinnerID" (as passed by frontend `updateSimWithOverride` -> `runSimulation` -> `fetch`)
-                // But wait, `runSimulation` sends `overrides = { [winnerId]: 'win' }` ???
-                // NO, `userAction` does `USER_OVERRIDES[teamId] = action`.
-                // My new `updateSimWithOverride` in app.js sets `USER_ARROWS[sortedId] = winnerId`.
-                // Then `runSimulation` collects `USER_ARROWS`?
-                // I need to check `app.js` `runSimulation`.
-
-                // Ah, in `app.js` `runSimulation` (Line 58 in viewed code):
-                // `const overrides = {}; Object.values(USER_ARROWS).forEach(winnerId => { overrides[winnerId] = 'win'; });`
-                // OLD LOGIC WAS WRONG for the new Bracket System.
-                // I need to update `app.js` `runSimulation` to pass the raw `USER_ARROWS` (or equivalent) to backend.
-
-                // If I fix `app.js` to send `{ "KC-BUF": "12" }`, then here in `run` I get `key="KC-BUF"`, `value="12"`.
-                playoffOverrides[key] = action; // 'action' here is the winner ID
+            // 1. Explicit Game Overrides (e.g. "game:40123...")
+            if (key.startsWith('game:')) {
+                const gId = key.replace('game:', '');
+                fixedGames[gId] = action; // 'home', 'away', or 'tie'
                 continue;
             }
 
-            // Regular Season (Team ID based)
+            // 2. Playoff Matchup Overrides
+            if (key.includes('-')) {
+                playoffOverrides[key] = action; // winner ID
+                continue;
+            }
+
+            // 3. Regular Season Next-Game Overrides (Legacy/Simple)
             const teamId = key;
             const gId = teamNextGameId[teamId];
             if (gId) {
@@ -123,6 +112,7 @@ export class Simulator {
 
         const gamesToSimulate = [];
         for (const game of this.games) {
+            if (game.isPlayoff) continue; // DO NOT simulate bracket games in the regular season loop
             if (fixedGames[game.id]) {
                 this.updateStandings(simBaseTeams, game.homeId, game.awayId, fixedGames[game.id]);
             } else {
@@ -153,7 +143,7 @@ export class Simulator {
             const { afcSeeds, nfcSeeds } = this.processPlayoffSeeds(runTeams, results);
 
             // 4. Simulate Playoffs (New)
-            this.simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, playoffOverrides);
+            this.simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, gameStats, playoffOverrides);
         }
 
         // Set totalSims
@@ -218,7 +208,7 @@ export class Simulator {
         return Math.random() < prob ? 'home' : 'away';
     }
 
-    simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, playoffOverrides = {}) {
+    simulatePlayoffs(afcSeeds, nfcSeeds, results, matchupStats, gameStats, playoffOverrides = {}) {
         if (afcSeeds.length < 7 || nfcSeeds.length < 7) return;
 
         // TRACK MADE DIV (Byes)
@@ -237,15 +227,47 @@ export class Simulator {
         const play = (t1, t2, round) => {
             track(round, t1, t2);
 
-            // CHECK OVERRIDES
+            // UNIQUE KEY for this matchup
             const key = [t1.abbr, t2.abbr].sort().join('-');
-            if (playoffOverrides[key]) {
-                return String(playoffOverrides[key]) === String(t1.id) ? t1 : t2;
+
+            // Track Stats for Games Header (Match schedule game)
+            const scheduleGame = this.games.find(g =>
+                (g.homeId === t1.id && g.awayId === t2.id) ||
+                (g.homeId === t2.id && g.awayId === t1.id)
+            );
+
+            const recordResult = (winnerTeamId) => {
+                if (scheduleGame) {
+                    if (!gameStats[scheduleGame.id]) gameStats[scheduleGame.id] = { homeWins: 0, total: 0 };
+                    gameStats[scheduleGame.id].total++;
+                    if (String(winnerTeamId) === String(scheduleGame.homeId)) {
+                        gameStats[scheduleGame.id].homeWins++;
+                    }
+                }
+            };
+
+            // 1. CHECK HARD-CODED REAL RESULTS (e.g. LAR beat CAR)
+            if (this.completedPlayoffGames[key]) {
+                const winnerId = String(this.completedPlayoffGames[key]);
+                const winnerObj = winnerId === String(t1.id) ? t1 : t2;
+                recordResult(winnerObj.id);
+                return winnerObj;
             }
 
-            let winner = this.simulateMatchup(t1, t2);
-            while (winner === 'tie') winner = Math.random() < 0.5 ? 'home' : 'away';
-            return winner === 'home' ? t1 : t2;
+            // 2. CHECK USER OVERRIDES
+            if (playoffOverrides[key]) {
+                const winnerId = String(playoffOverrides[key]);
+                const winnerObj = winnerId === String(t1.id) ? t1 : t2;
+                recordResult(winnerObj.id);
+                return winnerObj;
+            }
+
+            let result = this.simulateMatchup(t1, t2);
+            while (result === 'tie') result = Math.random() < 0.5 ? 'home' : 'away';
+
+            const winnerObj = result === 'home' ? t1 : t2;
+            recordResult(winnerObj.id);
+            return winnerObj;
         };
 
         const runConf = (seeds, confName) => {
@@ -552,7 +574,9 @@ export class Simulator {
     }
 
     recordSeed(results, teamId, seed) {
-        results[teamId].madePlayoffs++;
+        if (!this.clinchedTeamIds.includes(String(teamId))) {
+            results[teamId].madePlayoffs++;
+        }
         if (seed === 1) results[teamId].seed1++;
         if (seed === 2) results[teamId].seed2++;
         if (seed === 3) results[teamId].seed3++;
